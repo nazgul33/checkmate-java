@@ -1,0 +1,7 @@
+PartialUpdateInterval = 3000
+FullUpdateInterval = 10000
+Clusters = "myCluster"
+
+[myCluster]
+WebPort = 8080
+Servers = localhost
