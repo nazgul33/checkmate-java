@@ -74,7 +74,7 @@ public class QCServer {
     private Map<String, QCQuery> queriesRunning;
     private Map<String, QCQuery> queriesComplete;
     private boolean online;
-    private QCCluster cluster;
+    public final QCCluster cluster;
 
     private List<ConDesc> connections = null;
     private ObjectPool objectPool = null;

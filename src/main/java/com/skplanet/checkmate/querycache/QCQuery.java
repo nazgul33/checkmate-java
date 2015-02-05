@@ -42,6 +42,7 @@ public class QCQuery {
         public long[] timeHistogram;
         public long[] execProfile;
         public long[] fetchProfile;
+        public String cancelUrl;
     }
 
     private QCServer server;
@@ -120,6 +121,7 @@ public class QCQuery {
         }
         eq.fetchProfile = new long[fetchProfile.length];
         System.arraycopy(eq.fetchProfile, 0, fetchProfile, 0, fetchProfile.length);
+        eq.cancelUrl = "http://" + server.name + ":" + server.cluster.getOpt().webPort + "/api/cancelQuery?id="+id+"&driver="+backend;
         return eq;
     }
 }

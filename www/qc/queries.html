@@ -28,7 +28,8 @@
 					contents += '<tr><td>'+q.server+'</td><td>'+q.id+'</td><td>'
 						+q.backend+'</td><td>'+q.user+'</td><td>'+q.statement+'</td><td>'
 						+q.state+'</td><td>'+q.client+'</td><td>'+q.rowCnt+'</td><td>'
-						+formatDate(new Date(q.startTime))+'</td><td>'
+						+formatDate(new Date(q.startTime))
+						+'</td><td><a href="'+q.cancelUrl+'">Cancel</a></td><td>'
 						+((new Date()) - q.startTime)+'</td></tr>';
 				}
 				$('#queriesinflight tbody').html(contents);
@@ -78,7 +79,7 @@
 <div class="container-fluid">
 	<table class="table table-striped" id="queriesinflight">
 		<thead><tr>
-			<th>server</th><th>id</th><th>type</th><th>user</th><th>statement</th><th>state</th><th>client ip</th><th>rows</th><th>startTime</th><th>elapsedTime</th>
+			<th>server</th><th>id</th><th>type</th><th>user</th><th>statement</th><th>state</th><th>client ip</th><th>rows</th><th>startTime</th><th>elapsedTime</th><th>Cancel</th>
 		</tr></thead>
 		<tbody>
 		</tbody>
