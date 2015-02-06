@@ -1,3 +1,4 @@
+<%@ taglib prefix="c" uri="http://java.sun.com/jsp/jstl/core" %>
 <html>
 <head>
 	<meta charset="utf-8" />
@@ -9,12 +10,12 @@
 	<script src="/js/jquery-1.11.1.min.js"></script>
 	<script src="/bootstrap/js/bootstrap.min.js"></script>
 	<script src="/js/utils.js"></script>
-	<script src="/js/common.js"></script>
 </head>
 <script type="text/javascript">
 	var g_running_queries = [];
 	var g_rq_update = 0;
 	var g_complete_queries = [];
+	var g_cluster_name = '${param.cluster}';
 
 	function getRunningQueries() {
 		$.ajax( '/api/qc/runningQueries?cluster='+g_cluster_name+'&lastUpdate='+g_rq_update, {
@@ -60,7 +61,6 @@
 	}
 
 	$(function() {
-		clusterInit('/api/qc/clusterList', '/qc/header.html');
 		if (g_cluster_name.length > 0) {
 			getRunningQueries();
 			getCompleteQueries();
@@ -71,7 +71,7 @@
 </script>
 <body>
 
-<div id="header-div"></div>
+<%@include file="header.jsp"%>
 
 <H1>QueryCache : Queries</H1>
 

@@ -9,7 +9,8 @@
   <url>http://maven.apache.org</url>
 
   <properties>
-    <jettyVersion>9.2.5.v20141112</jettyVersion>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    <jettyVersion>9.2.6.v20141205</jettyVersion>
   </properties>
 
   <build>
@@ -45,6 +46,47 @@
           <target>1.7</target>
         </configuration>
       </plugin>
+      <plugin>
+        <groupId>org.codehaus.mojo</groupId>
+        <artifactId>exec-maven-plugin</artifactId>
+        <version>1.2</version>
+        <configuration>
+          <executable>java</executable>
+          <arguments>
+            <!--<argument>-cp</argument>-->
+            <!--<classpath />-->
+            <argument>-cp</argument>
+            <argument>${basedir}/conf:${basedir}/lib/*</argument>
+            <argument>-DCM_HOME=${basedir}</argument>
+            <argument>com.skplanet.checkmate.CheckMateServer</argument>
+          </arguments>
+        </configuration>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-enforcer-plugin</artifactId>
+        <version>1.1.1</version>
+        <executions>
+          <execution>
+            <id>enforce-java</id>
+            <goals>
+              <goal>enforce</goal>
+            </goals>
+            <configuration>
+              <rules>
+                <requireMavenVersion>
+                  <version>[3.0.0,)</version>
+                </requireMavenVersion>
+                <requireJavaVersion>
+                  <version>[1.7,)</version>
+                  <message>[ERROR] OLD JDK [${java.version}] in use.
+                    Jetty ${jettyVersion} requires JDK 1.7 or newer</message>
+                </requireJavaVersion>
+              </rules>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
     </plugins>
   </build>
 
@@ -69,6 +111,31 @@
       <groupId>org.eclipse.jetty</groupId>
       <artifactId>jetty-servlet</artifactId>
       <version>${jettyVersion}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.eclipse.jetty</groupId>
+      <artifactId>apache-jsp</artifactId>
+      <version>${jettyVersion}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.eclipse.jetty</groupId>
+      <artifactId>apache-jstl</artifactId>
+      <version>${jettyVersion}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.eclipse.jetty</groupId>
+      <artifactId>jetty-webapp</artifactId>
+      <version>${jettyVersion}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.eclipse.jetty</groupId>
+      <artifactId>jetty-annotations</artifactId>
+      <version>${jettyVersion}</version>
+    </dependency>
+    <dependency>
+      <groupId>javax.servlet</groupId>
+      <artifactId>javax.servlet-api</artifactId>
+      <version>3.1.0</version>
     </dependency>
     <dependency>
       <groupId>org.jsoup</groupId>
