@@ -1,5 +1,7 @@
 package com.skplanet.checkmate.querycache;
 
+import org.apache.commons.codec.binary.Base64;
+
 import java.util.Date;
 
 /**
@@ -26,6 +28,7 @@ public class QCQuery {
     }
 
     public static class QueryExport {
+        public String cuqId; // cluster unique query id
         public String server;
         public String id;
         public String backend;
@@ -102,6 +105,12 @@ public class QCQuery {
 
     public QueryExport export() {
         QueryExport eq = new QueryExport();
+        eq.cuqId = new String(Base64.encodeBase64((server.name+id+backend).getBytes()));
+        // remove characters not supported by html4 standard for id field.
+        eq.cuqId = eq.cuqId.replace('+',':');
+        eq.cuqId = eq.cuqId.replace('/','.');
+        eq.cuqId = eq.cuqId.replace('=','-');
+
         eq.server = server.name;
         eq.id = id;
         eq.backend = backend;

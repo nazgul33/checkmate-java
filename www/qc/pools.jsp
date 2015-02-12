@@ -1,4 +1,6 @@
 <%@ taglib prefix="c" uri="http://java.sun.com/jsp/jstl/core" %>
+<%@ taglib uri="http://java.sun.com/jsp/jstl/functions"  prefix="fn"%>
+<jsp:useBean id="clusters" scope="request" class="com.beans.ClustersBean"/>
 <html>
 <head>
 	<meta charset="utf-8" />
@@ -37,7 +39,16 @@
 	}
 
 	$(function() {
-		getAll();
+		$('#header-title').html('<span style="color:white; font-weight: bold;">QueryCache :: Pools</span>');
+
+		if (g_cluster_name == null || g_cluster_name.length == 0) {
+			<c:if test="${fn:length(clusters.qcClusters) > 0}">
+			window.location.href=window.location.href + "?cluster=${clusters.qcClusters[0]}";
+			</c:if>
+		}
+		else {
+			getAll();
+		}
 	});
 
 </script>
@@ -45,11 +56,12 @@
 
 <%@include file="header.jsp"%>
 
-<H1>QueryCache : Pools</H1>
+<div class="container-fluid" align="center">
+<div style="width: 90%" align="left">
 
-<H2>Connection Pool Stats</H2>
-<div class="container">
-	<table class="table table-bordered table-nonfluid" id="connpool">
+<div style="float: left; width: 50%;">
+	<H2>Connection Pool Stats</H2>
+	<table class="table table-striped small table-nonfluid" id="connpool">
 		<thead><tr>
 			<th>server</th><th>backend</th><th>free</th><th>in use</th>
 		</tr></thead>
@@ -58,15 +70,18 @@
 	</table>
 </div>
 
-<H2>Object Pool Stats : Free Objects in Pool</H2>
-<div class="container">
-	<table class="table table-bordered table-nonfluid" id="objpool">
+<div style="float: right; width: 50%;">
+	<H2>Object Pool Stats</H2>
+	<table class="table table-striped small table-nonfluid" id="objpool">
 		<thead><tr>
 			<th>server</th><th>TROWSET</th><th>TROW</th><th>TCOLUMNVALUE</th><th>TSTRINGVALUE</th>
 		</tr></thead>
 		<tbody>
 		</tbody>
 	</table>
+</div>
+
+</div>
 </div>
 
 </body>

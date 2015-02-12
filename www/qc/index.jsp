@@ -1,4 +1,6 @@
 <%@ taglib prefix="c" uri="http://java.sun.com/jsp/jstl/core" %>
+<%@ taglib uri="http://java.sun.com/jsp/jstl/functions"  prefix="fn"%>
+<jsp:useBean id="clusters" scope="request" class="com.beans.ClustersBean"/>
 <html>
 <head>
 	<meta charset="utf-8" />
@@ -46,7 +48,16 @@
 	}
 
 	$(function() {
-		getAll();
+		$('#header-title').html('<span style="color:white; font-weight: bold;">QueryCache :: System</span>');
+
+		if (g_cluster_name == null || g_cluster_name.length == 0) {
+			<c:if test="${fn:length(clusters.qcClusters) > 0}">
+			window.location.href=window.location.href + "?cluster=${clusters.qcClusters[0]}";
+			</c:if>
+		}
+		else {
+			getAll();
+		}
 	});
 
 </script>
@@ -54,39 +65,46 @@
 
 <%@include file="header.jsp"%>
 
-<H1>QueryCache System/Process Information</H1>
+<div class="container-fluid" align="center">
+<div style="width: 90%; text-align:center; position: relative;">
 
-<H2>Jvm Process Info</H2>
-<div class="container">
-	<table class="table table-bordered table-nonfluid" id="JVMInfo">
+<%--<div class="left" style="float: left; width: 500px; position: relative;">--%>
+<div class="left" style="width: 33%;">
+	<H2>Jvm Process Info</H2>
+	<table class="table table-striped small" id="JVMInfo" style="width: 95%">
 		<thead>
-		<tr><th>server</th><th>#processors</th><th>mem free</th><th>mem used</th><th>mem max</th></tr>
+			<tr><th>server</th><th>#processors</th><th>mem free</th><th>mem used</th><th>mem max</th></tr>
 		</thead>
 		<tbody>
 		</tbody>
 	</table>
 </div>
 
-<H2>System Info</H2>
-<div class="container">
-	<table class="table table-bordered table-nonfluid" id="SystemInfo">
+<%--<div style="float: right; width: 500px; position: relative;">--%>
+<div class="right" style="width: 33%;">
+	<H2>Thread Info</H2>
+	<table class="table table-striped small" id="ThreadInfo" style="width: 95%">
 		<thead>
-		<tr><th>server</th><th>system load</th><th>querycache load</th><th>phy.mem free</th><th>phy.mem total</th></tr>
+			<tr><th>server</th><th>threads</th><th>active query thread</th></tr>
 		</thead>
 		<tbody>
 		</tbody>
 	</table>
 </div>
 
-<H2>Thread Info</H2>
-<div class="container">
-	<table class="table table-bordered table-nonfluid" id="ThreadInfo">
+<%--<div style="display: inline; width: 500px; position: relative;">--%>
+<div class="center" style="width: 34%; left:33%;">
+	<H2>System Info</H2>
+	<table class="table table-striped small" id="SystemInfo" style="width: 95%">
 		<thead>
-		<tr><th>server</th><th>threads</th><th>active query thread</th></tr>
+			<tr><th>server</th><th>system load</th><th>querycache load</th><th>phy.mem free</th><th>phy.mem total</th></tr>
 		</thead>
 		<tbody>
 		</tbody>
 	</table>
+</div>
+
+</div>
 </div>
 </body>
 </html>
