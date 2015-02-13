@@ -1,11 +1,14 @@
 package com.skplanet.checkmate.querycache;
 
+import com.google.gson.Gson;
+import com.skplanet.checkmate.servlet.CMWebSocketQC;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.servlet.AsyncContext;
 import java.util.*;
 import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Created by nazgul33 on 15. 1. 27.
@@ -119,6 +122,12 @@ public class QCCluster {
         return opt;
     }
 
+    private static class RunningQueryEvent {
+        public String msgType = null;
+        public QCQuery.QueryExport query = null;
+        public String cuqId = null;
+    }
+
     private Map<String, QCQuery.QueryExport> exportedRunningQueriesMap = new HashMap<>();
     public QCQuery.QueryExport getExportedRunningQueryByCuqId(String cuqId) {
         QCQuery.QueryExport q;
@@ -135,13 +144,17 @@ public class QCCluster {
             queryUpdated = (exportedRunningQueriesMap.put(eq.cuqId, eq) != null);
         }
 
+        RunningQueryEvent evt = new RunningQueryEvent();
         if (queryUpdated) {
-            // TODO: notify websocket clients for this new Query
-//            LOG.debug(this.name + ": running queries updated");
+            evt.msgType = "runningQueryUpdated";
+            evt.query = eq;
+            evt.cuqId = null;
         } else {
-            // TODO: notify websocket clients for this new Query
-//            LOG.debug(this.name + ": running queries added");
+            evt.msgType = "runningQueryAdded";
+            evt.query = eq;
+            evt.cuqId = null;
         }
+        notifySubscribers(evt);
     }
 
     public void removeExportedRunningQuery(QCQuery q) {
@@ -155,8 +168,11 @@ public class QCCluster {
         }
 
         if (notifyClients) {
-            // TODO: notify websocket clients for this removed Query
-//            LOG.debug(this.name + ": running queries removed");
+            RunningQueryEvent evt = new RunningQueryEvent();
+            evt.msgType = "runningQueryRemoved";
+            evt.query = null;
+            evt.cuqId = cuqId;
+            notifySubscribers(evt);
         }
     }
 
@@ -250,5 +266,25 @@ public class QCCluster {
             }
         });
         return l;
+    }
+
+    private Map<Integer, CMWebSocketQC> realtimeMessageReceivers = new HashMap<>();
+    AtomicInteger realtimeMessageReceiversId = new AtomicInteger(0);
+    public int subscribe(CMWebSocketQC ws) {
+        int id = realtimeMessageReceiversId.getAndAdd(1);
+        realtimeMessageReceivers.put(id, ws);
+        return id;
+    }
+    public void unSubscribe(int id) {
+        realtimeMessageReceivers.remove(id);
+    }
+    public void notifySubscribers( RunningQueryEvent evt ) {
+        if ( realtimeMessageReceivers.size() > 0 ) {
+            Gson gson = new Gson();
+            String msg = gson.toJson(evt);
+            for (CMWebSocketQC ws: realtimeMessageReceivers.values()) {
+                ws.sendMessage(msg);
+            }
+        }
     }
 }

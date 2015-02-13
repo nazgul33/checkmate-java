@@ -25,9 +25,10 @@ import java.util.Date;
  */
 public class CMApiServletQC extends HttpServlet {
     private static final boolean DEBUG = false;
+    private static final Logger LOG = LoggerFactory.getLogger("api");
+
     private static final String ASYNC_REQ_ATTR = CMApiServletQC.class.getName() + ".async";
     private static final String ASYNC_RETURN_ATTR = CMApiServletQC.class.getName() + ".async.return";
-    private static final Logger LOG = LoggerFactory.getLogger("api");
     protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
 //        response.setContentType("application/json; charset=utf-8");
         response.setContentType("application/json; charset=utf-8");

@@ -16,6 +16,7 @@
 	var g_running_queries = {};
 	var g_rq_update = 0;
 	var g_complete_queries = [];
+	var g_rq_table = null;
 
 	function cancelQuery(q, l) {
 		l.start();
@@ -29,51 +30,58 @@
 		});
 	}
 
+	function addRunningQuery(q) {
+		q.cancelling = false;
+		var qTr = $('#' + q.cuqId);
+		if (qTr.length) {
+			// if the query exists, update
+			$('.q-state', qTr).html(q.state);
+			$('.q-rowcnt', qTr).html(q.rowCnt);
+		}
+		else {
+			var contents = '';
+			// insert
+			contents += '<tr id="' + q.cuqId + '"><td class="q-server">'+q.server
+			+'</td><td class="q-id">'+q.id
+			+'</td><td class="q-backend">'+q.backend
+			+'</td><td class="q-user">'+q.user
+			+'</td><td class="q-statement">'+q.statement
+			+'</td><td class="q-state">'+q.state
+			+'</td><td class="q-client">'+q.client
+			+'</td><td class="q-rowcnt">'+q.rowCnt
+			+'</td><td class="q-starttime">'+formatDate(new Date(q.startTime))
+			+'</td><td class="q-elapsed">'+((new Date()) - q.startTime)
+			+'</td><td class="q-cancel"><a href="#" class="btn btn-primary btn-xs ladda-button" data-style="zoom-in" data-size="xs" data-spinner-size="28" data-spinner-color="#ffffff" data-cuqId="'+ q.cuqId+'"><span class="ladda-label">Cancel</span></a>'+'</td></tr>';
+//						+'</td><td class="q-cancel"><a href="#" onclick="cancelQuery(\''+q.cuqId+'\',\''+q.cancelUrl+'\');">Cancel</a>'+'</td></tr>';
+			g_running_queries[q.cuqId] = q;
+			$(g_rq_table).append(contents);
+			$('#'+q.cuqId + ' .q-cancel a', g_rq_table).click(function(e) {
+				e.preventDefault();
+				cuqId = this.getAttribute("data-cuqId");
+				var q = g_running_queries[cuqId];
+				if (q) {
+					var l = Ladda.create(this);
+					cancelQuery(cuqId, l);
+				}
+			});
+		}
+	}
+
+	function removeRunningQuery(cuqId) {
+		$('#'+cuqId, g_rq_table).remove();
+		delete(g_running_queries[cuqId]);
+	}
+
 	function getRunningQueries() {
 		$.ajax( '/api/qc/runningQueries?cluster='+g_cluster_name+'&lastUpdate='+g_rq_update, {
 			timeout:20000,
 			success:function(data, ts, xhr) {
-				var contents = '';
 				var rqmap = {};
 				g_rq_update = data.time;
 				for (var i=0; i<data.rq.length; i++) {
 					var q = data.rq[i];
-					q.cancelling = false;
-					var qTr = $('#' + q.cuqId);
-					if (qTr.length) {
-						// if the query exists, update
-						$('.q-state', qTr).html(q.state);
-						$('.q-rowcnt', qTr).html(q.rowCnt);
-					}
-					else {
-						// insert
-						contents += '<tr id="' + q.cuqId + '"><td class="q-server">'+q.server
-						+'</td><td class="q-id">'+q.id
-						+'</td><td class="q-backend">'+q.backend
-						+'</td><td class="q-user">'+q.user
-						+'</td><td class="q-statement">'+q.statement
-						+'</td><td class="q-state">'+q.state
-						+'</td><td class="q-client">'+q.client
-						+'</td><td class="q-rowcnt">'+q.rowCnt
-						+'</td><td class="q-starttime">'+formatDate(new Date(q.startTime))
-						+'</td><td class="q-elapsed">'+((new Date()) - q.startTime)
-						+'</td><td class="q-cancel"><a href="#" class="btn btn-primary btn-xs ladda-button" data-style="zoom-in" data-size="xs" data-spinner-size="28" data-spinner-color="#ffffff" data-cuqId="'+ q.cuqId+'"><span class="ladda-label">Cancel</span></a>'+'</td></tr>';
-//						+'</td><td class="q-cancel"><a href="#" onclick="cancelQuery(\''+q.cuqId+'\',\''+q.cancelUrl+'\');">Cancel</a>'+'</td></tr>';
-						g_running_queries[q.cuqId] = q;
-					}
+					addRunningQuery(q);
 					rqmap[q.cuqId] = q;
-				}
-				if (contents.length > 0) {
-					$('#queriesinflight tbody').append(contents);
-					$('#queriesinflight tbody .q-cancel a').click(function(e) {
-						e.preventDefault();
-						cuqId = this.getAttribute("data-cuqId");
-						var q = g_running_queries[cuqId];
-						if (q) {
-							var l = Ladda.create(this);
-							cancelQuery(cuqId, l);
-						}
-					});
 				}
 
 				// remove disappeared query
@@ -82,14 +90,13 @@
 						continue;
 
 					if (!(cuqId in rqmap)) {
-						$('#' + cuqId).remove();
-						delete(g_running_queries[cuqId]);
+						removeRunningQuery(cuqId);
 					}
 				}
-				setTimeout(getRunningQueries, 0);
+//				setTimeout(getRunningQueries, 0);
 			},
 			error:function(xhr, ts, err) {
-				setTimeout(getRunningQueries, 10000);
+//				setTimeout(getRunningQueries, 10000);
 			}
 		});
 	}
@@ -111,6 +118,43 @@
 		});
 	}
 
+	var g_websocket = null;
+	function initWebSocket() {
+		if (g_websocket != null) {
+			g_websocket.close();
+		}
+
+		g_websocket = new WebSocket('ws://'+window.location.host+'/api/qc/websocket');
+		g_websocket.onopen = function() {
+			console.log('websocket connected');
+			// subscribe to a cluster
+			var subscribe = {'request':'subscribe', 'channel':'cluster', 'data':g_cluster_name};
+			this.send(JSON.stringify(subscribe));
+		};
+		g_websocket.onmessage = function(e) {
+			var msg = JSON.parse(e.data);
+			try {
+				switch (msg.msgType) {
+					case 'runningQueryAdded':
+					case 'runningQueryUpdated':
+						addRunningQuery(msg.query);
+						break;
+					case 'runningQueryRemoved':
+						removeRunningQuery(msg.cuqId);
+						break;
+					default:
+						console.log('unknown ws msg ' + e.data);
+				}
+			}
+			catch (ex) {
+				console.log('error parsing msg',msg, ex);
+			}
+		};
+		g_websocket.onclose= function() {
+			console.log('websocket closed');
+		};
+	}
+
 	$(function() {
 		$('#header-title').html('QueryCache :: Queries</span>');
 
@@ -120,16 +164,22 @@
 			</c:if>
 		}
 		else {
+			g_rq_table = $('#queriesinflight tbody');
 			getRunningQueries();
 			getCompleteQueries();
-			setInterval(getCompleteQueries, 10000);
+			initWebSocket();
+
+			setInterval(function() {
+				getRunningQueries();
+				getCompleteQueries();
+			}, 10*1000); // full update every 10 seconds;
 		}
 	});
 
 </script>
 
 <div class="container-fluid" align="center">
-	<div style="width: 90%; text-align:left; position: relative;">
+	<div class="cmscrollbar" style="width: 90%; height: 30%; text-align:left; position: relative;">
 		<H2>In-Flight Queries</H2>
 		<table class="table table-striped small" id="queriesinflight">
 			<thead><tr>
@@ -138,7 +188,9 @@
 			<tbody>
 			</tbody>
 		</table>
+	</div>
 
+	<div style="width: 90%; text-align:left; position: relative;">
 		<H2>Complete Queries</H2>
 		<table class="table table-striped small" id="queriescomplete">
 			<thead><tr>

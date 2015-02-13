@@ -2,6 +2,7 @@ package com.skplanet.checkmate;
 
 import com.skplanet.checkmate.querycache.QCClusterManager;
 import com.skplanet.checkmate.servlet.CMApiServletQC;
+import com.skplanet.checkmate.servlet.CMWebSocketServletQC;
 import org.apache.commons.configuration.HierarchicalINIConfiguration;
 import org.apache.commons.configuration.SubnodeConfiguration;
 import org.apache.tomcat.InstanceManager;
@@ -181,6 +182,7 @@ public class CheckMateServer
 
         ServletContextHandler apiQc = new ServletContextHandler(ServletContextHandler.SESSIONS);
         apiQc.setContextPath("/api/qc");
+        apiQc.addServlet(new ServletHolder(new CMWebSocketServletQC()), "/websocket/*");
         apiQc.addServlet(new ServletHolder(new CMApiServletQC()), "/*");
 
         File scratchDir = getScratchDir();

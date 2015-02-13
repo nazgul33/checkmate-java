@@ -153,19 +153,6 @@ public class QCServer {
                     Map<String, QCQuery.QueryImport> rqMap = new HashMap<>();
                     // process "current" running query list
                     for (QCQuery.QueryImport q : queries.runningQueries) {
-                        q.queryId = q.queryId.toLowerCase();
-                        if (this.queriesRunning.containsKey(q.queryId)) {
-                            QCQuery qExisting = this.queriesRunning.get(q.queryId);
-                            if ( qExisting.Update(q) ) {
-                                updated++;
-                                this.cluster.addExportedRunningQuery(qExisting);
-                            }
-                        } else {
-                            QCQuery qNew = new QCQuery(this, q);
-                            this.queriesRunning.put(q.queryId, qNew);
-                            added++;
-                            this.cluster.addExportedRunningQuery(qNew);
-                        }
                         // add to map for reverse existence check below.
                         rqMap.put(q.queryId, q);
                     }
@@ -179,6 +166,23 @@ public class QCServer {
                             removed++;
                         }
                     }
+
+                    for (QCQuery.QueryImport q : queries.runningQueries) {
+                        q.queryId = q.queryId.toLowerCase();
+                        if (this.queriesRunning.containsKey(q.queryId)) {
+                            QCQuery qExisting = this.queriesRunning.get(q.queryId);
+                            if ( qExisting.Update(q) ) {
+                                updated++;
+                                this.cluster.addExportedRunningQuery(qExisting);
+                            }
+                        } else {
+                            QCQuery qNew = new QCQuery(this, q);
+                            this.queriesRunning.put(q.queryId, qNew);
+                            added++;
+                            this.cluster.addExportedRunningQuery(qNew);
+                        }
+                    }
+
                     if (DEBUG) {
                         LOG.debug(this.name + ": running queries +" + added + " #" + updated + " -" + removed);
                     }
