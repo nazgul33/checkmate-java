@@ -1,3 +1,10 @@
+<link rel="stylesheet" type="text/css" href="/bootstrap/css/bootstrap.min.css">
+<link rel="stylesheet" type="text/css" href="/bootstrap/css/bootstrap-select.min.css">
+<link rel="stylesheet" type="text/css" href="/css/querycache.css">
+<script src="/js/jquery-1.11.1.min.js"></script>
+<script src="/bootstrap/js/bootstrap.min.js"></script>
+<script src="/bootstrap/js/bootstrap-select.min.js"></script>
+<script src="/js/utils.js"></script>
 <script type="text/javascript">
 	function onClusterChange(sel) {
 		<c:set var="path" value="${pageContext.request.requestURI}" />
@@ -8,6 +15,7 @@
 		$('.selectpicker').selectpicker();
 	});
 </script>
+
 <div class="container-fluid" align="center" style="padding: 10px; background-color: #285e8e;">
 <div id="header" style="width: 90%;">
 	<div id="header-clusters" class="header-left" align="left">
@@ -23,7 +31,9 @@
 			</c:forEach>
 		</select>
 	</div>
-	<div id="header-title" class="header-middle" align="center">
+	<div class="header-middle" align="center">
+		<span style="color:white; font-weight: bold;">CheckMate ::</span>
+		<span id="header-title" style="color:white; font-weight: bold;"></span>
 	</div>
 	<div style="clear: both;"></div>
 </div>

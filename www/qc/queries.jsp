@@ -4,20 +4,13 @@
 <html>
 <head>
 	<meta charset="utf-8" />
-	<title>QueryCache</title>
-	<style type="text/css">
-		@import '/bootstrap/css/bootstrap.min.css';
-		@import '/bootstrap/css/bootstrap-select.min.css';
-		@import '/ladda/ladda-themeless.min.css';
-		@import '/css/querycache.css';
-	</style>
-	<script src="/js/jquery-1.11.1.min.js"></script>
-	<script src="/bootstrap/js/bootstrap.min.js"></script>
-	<script src="/bootstrap/js/bootstrap-select.min.js"></script>
-	<script src="/ladda/spin.min.js"></script>
-	<script src="/ladda/ladda.min.js"></script>
-	<script src="/js/utils.js"></script>
+	<title>CheckMate :: QueryCache :: Queries</title>
 </head>
+<body>
+<%@include file="header.jsp"%>
+<link rel="stylesheet" type="text/css" href="/ladda/ladda-themeless.min.css">
+<script src="/ladda/spin.min.js"></script>
+<script src="/ladda/ladda.min.js"></script>
 <script type="text/javascript">
 	var g_cluster_name = '${param.cluster}';
 	var g_running_queries = {};
@@ -119,7 +112,7 @@
 	}
 
 	$(function() {
-		$('#header-title').html('<span style="color:white; font-weight: bold;">QueryCache :: Queries</span>');
+		$('#header-title').html('QueryCache :: Queries</span>');
 
 		if (g_cluster_name == null || g_cluster_name.length == 0) {
 			<c:if test="${fn:length(clusters.qcClusters) > 0}">
@@ -134,9 +127,6 @@
 	});
 
 </script>
-<body>
-
-<%@include file="header.jsp"%>
 
 <div class="container-fluid" align="center">
 	<div style="width: 90%; text-align:left; position: relative;">

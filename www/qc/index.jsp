@@ -5,14 +5,10 @@
 <head>
 	<meta charset="utf-8" />
 	<title>QueryCache</title>
-	<style type="text/css">
-		@import '/bootstrap/css/bootstrap.min.css';
-		@import '/css/querycache.css';
-	</style>
-	<script src="/js/jquery-1.11.1.min.js"></script>
-	<script src="/bootstrap/js/bootstrap.min.js"></script>
-	<script src="/js/utils.js"></script>
 </head>
+<body>
+
+<%@include file="header.jsp"%>
 <script type="text/javascript">
 	var g_connection_pool = [];
 	var g_object_pool = null;
@@ -61,9 +57,6 @@
 	});
 
 </script>
-<body>
-
-<%@include file="header.jsp"%>
 
 <div class="container-fluid" align="center">
 <div style="width: 90%; text-align:center; position: relative;">
