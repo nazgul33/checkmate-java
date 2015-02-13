@@ -11,7 +11,9 @@ import java.util.concurrent.ConcurrentLinkedQueue;
  * Created by nazgul33 on 15. 1. 27.
  */
 public class QCCluster {
+    private static final boolean DEBUG = false;
     private static final Logger LOG = LoggerFactory.getLogger("querycache");
+    private static int MAX_COMPLETE_QUERIES = 100;
 
     static public class Options {
         public int webPort = 8080;
@@ -92,7 +94,9 @@ public class QCCluster {
             }
         }
         Date end = new Date();
-        LOG.debug("Updating cluster " + name + " took " + (end.getTime() - start.getTime()) + " ms" + (partial? " (partial)":""));
+        if (DEBUG) {
+            LOG.debug("Updating cluster " + name + " took " + (end.getTime() - start.getTime()) + " ms" + (partial ? " (partial)" : ""));
+        }
         if (updated) {
             lastUpdate = new Date().getTime();
             // dispatch queued async jobs.
@@ -100,6 +104,10 @@ public class QCCluster {
                 async.dispatch();
             }
             asyncRQList.clear();
+        }
+
+        if (!partial) {
+            refreshExportedCompleteQueries();
         }
     }
 
@@ -111,10 +119,51 @@ public class QCCluster {
         return opt;
     }
 
-    public Collection<QCQuery.QueryExport> exportRunningQueries() {
+    private Map<String, QCQuery.QueryExport> exportedRunningQueriesMap = new HashMap<>();
+    public QCQuery.QueryExport getExportedRunningQueryByCuqId(String cuqId) {
+        QCQuery.QueryExport q;
+        synchronized (exportedRunningQueriesMap) {
+            q = exportedRunningQueriesMap.get(cuqId);
+        }
+        return q;
+    }
+
+    public void addExportedRunningQuery(QCQuery q) {
+        QCQuery.QueryExport eq = q.export();
+        boolean queryUpdated;
+        synchronized (exportedRunningQueriesMap) {
+            queryUpdated = (exportedRunningQueriesMap.put(eq.cuqId, eq) != null);
+        }
+
+        if (queryUpdated) {
+            // TODO: notify websocket clients for this new Query
+//            LOG.debug(this.name + ": running queries updated");
+        } else {
+            // TODO: notify websocket clients for this new Query
+//            LOG.debug(this.name + ": running queries added");
+        }
+    }
+
+    public void removeExportedRunningQuery(QCQuery q) {
+        String cuqId = q.getCuqId();
+        boolean notifyClients;
+        synchronized (exportedRunningQueriesMap) {
+            if (!exportedRunningQueriesMap.containsKey(cuqId)) {
+                LOG.debug("trying to remove non-existent cuqId");
+            }
+            notifyClients = (exportedRunningQueriesMap.remove(cuqId) != null);
+        }
+
+        if (notifyClients) {
+            // TODO: notify websocket clients for this removed Query
+//            LOG.debug(this.name + ": running queries removed");
+        }
+    }
+
+    public Collection<QCQuery.QueryExport> getExportedRunningQueries() {
         List<QCQuery.QueryExport> ql = new ArrayList<>();
-        for (QCServer s: servers.values()) {
-            ql.addAll(s.exportRunningQueries());
+        synchronized (exportedRunningQueriesMap) {
+            ql.addAll(exportedRunningQueriesMap.values());
         }
         Collections.sort(ql, new Comparator<QCQuery.QueryExport>() {
             @Override
@@ -125,7 +174,9 @@ public class QCCluster {
         return ql;
     }
 
-    public Collection<QCQuery.QueryExport> exportCompleteQueries() {
+    // TODO: paging
+    private List<QCQuery.QueryExport> exportedCompleteQueries = new ArrayList<>();
+    private void refreshExportedCompleteQueries() {
         List<QCQuery.QueryExport> ql = new ArrayList<>();
         for (QCServer s: servers.values()) {
             ql.addAll(s.exportCompleteQueries());
@@ -136,6 +187,20 @@ public class QCCluster {
                 return ((o2.endTime - o1.endTime) < 0) ? -1 : (o2.endTime == o1.endTime) ? 0 : 1;
             }
         });
+
+        ql = ql.subList(0, (ql.size()>MAX_COMPLETE_QUERIES)? MAX_COMPLETE_QUERIES:ql.size());
+        // subset of all queries from servers, to limit number of queries remembered
+        synchronized (exportedCompleteQueries) {
+            exportedCompleteQueries.clear();
+            exportedCompleteQueries.addAll(ql);
+        }
+    }
+
+    public Collection<QCQuery.QueryExport> getExportedCompleteQueries() {
+        List<QCQuery.QueryExport> ql = new ArrayList<>();
+        synchronized (exportedCompleteQueries) {
+            ql.addAll(exportedCompleteQueries);
+        }
         return ql;
     }
 

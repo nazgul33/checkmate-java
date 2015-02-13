@@ -117,14 +117,14 @@ public class QCServer {
     public boolean Update(boolean partial) {
         if (partial) {
             if (this.queriesRunning.size() > 0) {
-                UpdateQueries();
+                UpdateQueries(true);
                 lastQueryUpdate = new Date().getTime();
                 return true;
             }
             return false;
         }
 
-        UpdateQueries();
+        UpdateQueries(false);
         lastQueryUpdate = new Date().getTime();
         UpdateConnections();
         UpdateObjectPools();
@@ -136,7 +136,7 @@ public class QCServer {
         return "http://" + this.name + ":" + cluster.getOpt().webPort + path;
     }
 
-    protected void UpdateQueries() {
+    protected void UpdateQueries(boolean runningQueriesOnly) {
         HttpUtil httpUtil = new HttpUtil();
         StringBuffer buf = new StringBuffer();
         int res = 0;
@@ -156,12 +156,15 @@ public class QCServer {
                         q.queryId = q.queryId.toLowerCase();
                         if (this.queriesRunning.containsKey(q.queryId)) {
                             QCQuery qExisting = this.queriesRunning.get(q.queryId);
-                            qExisting.Update(q);
-                            updated++;
+                            if ( qExisting.Update(q) ) {
+                                updated++;
+                                this.cluster.addExportedRunningQuery(qExisting);
+                            }
                         } else {
                             QCQuery qNew = new QCQuery(this, q);
                             this.queriesRunning.put(q.queryId, qNew);
                             added++;
+                            this.cluster.addExportedRunningQuery(qNew);
                         }
                         // add to map for reverse existence check below.
                         rqMap.put(q.queryId, q);
@@ -171,6 +174,7 @@ public class QCServer {
                     while (it.hasNext()) {
                         Map.Entry<String, QCQuery> entry = it.next();
                         if (!rqMap.containsKey(entry.getKey())) {
+                            this.cluster.removeExportedRunningQuery(entry.getValue());
                             it.remove();
                             removed++;
                         }
@@ -179,37 +183,39 @@ public class QCServer {
                         LOG.debug(this.name + ": running queries +" + added + " #" + updated + " -" + removed);
                     }
                 }
-                synchronized (queriesComplete){
-                    int added = 0;
-                    int removed = 0;
-                    // process "current" complete query list
-                    for (QCQuery.QueryImport q: queries.completeQueries) {
-                        q.queryId = q.queryId.toLowerCase();
-                        // complete query has no changes. process new complete queries only.
-                        if (!this.queriesComplete.containsKey(q.queryId)) {
-                            QCQuery qNew = new QCQuery(this, q);
-                            this.queriesComplete.put(q.queryId, qNew);
-                            added++;
-                        }
-                    }
-                    // remove oldest query. sort key is endTime
-                    if (this.queriesComplete.size() > MAX_COMPLETE_QUERIES);
-                    {
-                        ArrayList<QCQuery> cqList = new ArrayList<>(queriesComplete.size());
-                        cqList.addAll(queriesComplete.values());
-                        Collections.sort(cqList, new Comparator<QCQuery>() {
-                            @Override
-                            public int compare(QCQuery o1, QCQuery o2) {
-                                return ((o2.startTime - o1.startTime) < 0) ? -1 : (o2.startTime == o1.startTime) ? 0 : 1;
+                if (runningQueriesOnly == false) {
+                    synchronized (queriesComplete) {
+                        int added = 0;
+                        int removed = 0;
+                        // process "current" complete query list
+                        for (QCQuery.QueryImport q : queries.completeQueries) {
+                            q.queryId = q.queryId.toLowerCase();
+                            // complete query has no changes. process new complete queries only.
+                            if (!this.queriesComplete.containsKey(q.queryId)) {
+                                QCQuery qNew = new QCQuery(this, q);
+                                this.queriesComplete.put(q.queryId, qNew);
+                                added++;
                             }
-                        });
-                        for (int i=MAX_COMPLETE_QUERIES; i<cqList.size(); i--) {
-                            queriesComplete.remove(cqList.get(i).id);
-                            removed++;
                         }
-                    }
-                    if (DEBUG) {
-                        LOG.debug(this.name + ": complete queries +" + added + " -" + removed);
+                        // remove oldest query. sort key is endTime
+                        if (this.queriesComplete.size() > MAX_COMPLETE_QUERIES) ;
+                        {
+                            ArrayList<QCQuery> cqList = new ArrayList<>(queriesComplete.size());
+                            cqList.addAll(queriesComplete.values());
+                            Collections.sort(cqList, new Comparator<QCQuery>() {
+                                @Override
+                                public int compare(QCQuery o1, QCQuery o2) {
+                                    return ((o2.startTime - o1.startTime) < 0) ? -1 : (o2.startTime == o1.startTime) ? 0 : 1;
+                                }
+                            });
+                            for (int i = cqList.size()-1; i >= MAX_COMPLETE_QUERIES; i--) {
+                                queriesComplete.remove(cqList.get(i).id);
+                                removed++;
+                            }
+                        }
+                        if (DEBUG) {
+                            LOG.debug(this.name + ": complete queries +" + added + " -" + removed);
+                        }
                     }
                 }
             }
@@ -217,7 +223,7 @@ public class QCServer {
             if (e instanceof ConnectException)
                 LOG.error(this.name + ": updating queries: connection refused.");
             else
-                LOG.error(this.name + ": updating queries: ", e.toString());
+                LOG.error(this.name + ": updating queries: ", e);
         }
     }
 

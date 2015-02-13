@@ -2,6 +2,7 @@ package com.skplanet.checkmate.querycache;
 
 import org.apache.commons.codec.binary.Base64;
 
+import java.util.Arrays;
 import java.util.Date;
 
 /**
@@ -87,29 +88,46 @@ public class QCQuery {
         this.updateTime = new Date().getTime();
     }
 
-    public void Update(QueryImport qObj) {
+    public boolean Update(QueryImport qObj) {
+        boolean updated = false;
         if ( this.state != qObj.stmtState ) {
             if (DEBUG) System.console().printf("query %s update state %s -> %s\n", id, state, qObj.stmtState);
             this.state = qObj.stmtState;
+            updated = true;
         }
         if ( this.rowCnt != qObj.rowCnt ) {
             if (DEBUG) System.console().printf("query %s update rowCnt %s -> %s\n", id, rowCnt, qObj.rowCnt);
             this.rowCnt = qObj.rowCnt;
+            updated = true;
         }
-        this.timeHistogram = qObj.timeHistogram;
-        this.execProfile = qObj.execProfile;
-        this.fetchProfile = qObj.fetchProfile;
+        if ( !Arrays.equals(this.timeHistogram, qObj.timeHistogram) ) {
+            this.timeHistogram = qObj.timeHistogram;
+            updated = true;
+        }
+        if ( !Arrays.equals(this.execProfile, qObj.execProfile) ) {
+            this.execProfile = qObj.execProfile;
+            updated = true;
+        }
+        if ( !Arrays.equals(this.fetchProfile, qObj.fetchProfile) ) {
+            this.fetchProfile = qObj.fetchProfile;
+            updated = true;
+        }
 
-        this.updateTime = new Date().getTime();
+        if (updated) {
+            this.updateTime = new Date().getTime();
+        }
+        return updated;
+    }
+
+    public String getCuqId() {
+        String cuqid = new String(Base64.encodeBase64((server.name+id+backend).trim().toUpperCase().getBytes()));
+        return cuqid.replace('+',':').replace('/','.').replace('=','-');
     }
 
     public QueryExport export() {
         QueryExport eq = new QueryExport();
-        eq.cuqId = new String(Base64.encodeBase64((server.name+id+backend).getBytes()));
+        eq.cuqId = getCuqId();
         // remove characters not supported by html4 standard for id field.
-        eq.cuqId = eq.cuqId.replace('+',':');
-        eq.cuqId = eq.cuqId.replace('/','.');
-        eq.cuqId = eq.cuqId.replace('=','-');
 
         eq.server = server.name;
         eq.id = id;
@@ -130,7 +148,8 @@ public class QCQuery {
         }
         eq.fetchProfile = new long[fetchProfile.length];
         System.arraycopy(eq.fetchProfile, 0, fetchProfile, 0, fetchProfile.length);
-        eq.cancelUrl = "http://" + server.name + ":" + server.cluster.getOpt().webPort + "/api/cancelQuery?id="+id+"&driver="+backend;
+        // eq.cancelUrl = "http://" + server.name + ":" + server.cluster.getOpt().webPort + "/api/cancelQuery?id="+id+"&driver="+backend;
+        eq.cancelUrl = "/api/qc/cancelQuery?cluster="+server.cluster.name+"&cuqId="+eq.cuqId;
         return eq;
     }
 }

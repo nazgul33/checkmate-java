@@ -180,55 +180,59 @@ public class QCClusterManager {
         }
     }
 
-    public Collection<QCQuery.QueryExport> exportRunningQueries(String clusterName) {
+    public QCCluster getCluster(String clusterName) {
         for (QCCluster c: clusters) {
             if (clusterName.equals(c.name)) {
-                return c.exportRunningQueries();
-            }
-        }
-        return null;
-    }
-    public Collection<QCQuery.QueryExport> exportCompleteQueries(String clusterName) {
-        for (QCCluster c: clusters) {
-            if (clusterName.equals(c.name)) {
-                return c.exportCompleteQueries();
+                return c;
             }
         }
         return null;
     }
 
+    public Collection<QCQuery.QueryExport> getExportedRunningQueries(String clusterName) {
+        QCCluster c = getCluster(clusterName);
+        if (c!=null) {
+            return c.getExportedRunningQueries();
+        }
+        return null;
+    }
+
+    public Collection<QCQuery.QueryExport> getExportedCompleteQueries(String clusterName) {
+        QCCluster c = getCluster(clusterName);
+        if (c!=null) {
+            return c.getExportedCompleteQueries();
+        }
+        return null;
+    }
+
     public long getLastUpdateTime(String clusterName) {
-        for (QCCluster c: clusters) {
-            if (clusterName.equals(c.name)) {
-                return c.getLastUpdateTime();
-            }
+        QCCluster c = getCluster(clusterName);
+        if (c!=null) {
+            return c.getLastUpdateTime();
         }
         return -1;
     }
 
     private ConcurrentLinkedQueue<AsyncContext> asyncRQList = new ConcurrentLinkedQueue<>();
     public void addAsyncContextRQ(AsyncContext async, String clusterName) {
-        for (QCCluster c: clusters) {
-            if (clusterName.equals(c.name)) {
-                c.addAsyncContextRQ(async);
-            }
+        QCCluster c = getCluster(clusterName);
+        if (c!=null) {
+            c.addAsyncContextRQ(async);
         }
     }
 
     public Collection<QCCluster.SystemInfo> getSystemInfoList(String clusterName) {
-        for (QCCluster c: clusters) {
-            if (clusterName.equals(c.name)) {
-                return c.getSystemInfo();
-            }
+        QCCluster c = getCluster(clusterName);
+        if (c!=null) {
+            return c.getSystemInfo();
         }
         return null;
     }
 
     public Collection<QCCluster.PoolInfo> getPoolInfoList(String clusterName) {
-        for (QCCluster c: clusters) {
-            if (clusterName.equals(c.name)) {
-                return c.getPoolInfo();
-            }
+        QCCluster c = getCluster(clusterName);
+        if (c!=null) {
+            return c.getPoolInfo();
         }
         return null;
     }
