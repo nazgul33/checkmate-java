@@ -150,15 +150,22 @@ public class CMApiServletQC extends HttpServlet {
                 break;
             }
             case "/cancelQuery": {
-                // TODO : build async task which sends request to querycache.
                 if ( request.getAttribute(ASYNC_REQ_ATTR) == null ) {
                     String cluster = request.getParameter("cluster");
                     final String cuqId = request.getParameter("cuqId");
-                    final QCCluster c = qcMgr.getCluster(cluster);
                     if (cluster == null || cluster.length() == 0 || cuqId == null || cuqId.length() == 0) {
                         response.setContentType("application/json; charset=utf-8");
                         response.setStatus(HttpServletResponse.SC_NOT_FOUND);
                         writer.printf("{\"result\":\"%s\", \"msg\":\"%s\"}", "error", "Invalid parameter.");
+                        LOG.error("cancelQuery invalid. " + cluster + " " + cuqId);
+                        break;
+                    }
+                    final QCCluster c = qcMgr.getCluster(cluster);
+                    if (c == null) {
+                        response.setContentType("application/json; charset=utf-8");
+                        response.setStatus(HttpServletResponse.SC_NOT_FOUND);
+                        writer.printf("{\"result\":\"%s\", \"msg\":\"%s\"}", "error", "Invalid parameter.");
+                        LOG.error("cancelQuery invalid. cluster " + cluster + " not found");
                         break;
                     }
                     final QCQuery.QueryExport eq = c.getExportedRunningQueryByCuqId(cuqId);
@@ -166,6 +173,7 @@ public class CMApiServletQC extends HttpServlet {
                         response.setContentType("application/json; charset=utf-8");
                         response.setStatus(HttpServletResponse.SC_NOT_FOUND);
                         writer.printf("{\"result\":\"%s\", \"msg\":\"%s\"}", "error", "query finished already.");
+                        LOG.error("cancelQuery invalid. cuqId " + cuqId + " not found");
                         break;
                     }
 
@@ -184,9 +192,7 @@ public class CMApiServletQC extends HttpServlet {
 
                                 httpUtil.get( url, buf );
                                 async.getRequest().setAttribute(ASYNC_RETURN_ATTR, buf.toString());
-                                if (DEBUG) {
-                                    LOG.debug("Cancel reply " + buf.toString());
-                                }
+                                LOG.info("Cancel reply " + buf.toString());
                             } catch (Exception e) {
                                 async.getRequest().setAttribute(ASYNC_RETURN_ATTR,
                                         "{\"result\":\"error\", \"msg\":\"Cancel failed.\"}");
@@ -199,11 +205,13 @@ public class CMApiServletQC extends HttpServlet {
                     String reply = (String) request.getAttribute(ASYNC_RETURN_ATTR);
                     if (reply == null || reply.length() == 0) {
                         LOG.error("AsyncTask didn't set valid return message.");
+                        reply="{\"result\":\"error\", \"msg\":\"Result was not set.\"}";
                     }
                     response.setContentType("application/json; charset=utf-8");
-                    response.setStatus(HttpServletResponse.SC_NOT_FOUND);
+                    response.setStatus(HttpServletResponse.SC_OK);
                     writer.print(reply);
                 }
+                break;
             }
             default: {
                 LOG.error(request.getRequestURI() + " not found..");

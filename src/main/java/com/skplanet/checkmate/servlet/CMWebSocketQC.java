@@ -71,6 +71,10 @@ public class CMWebSocketQC implements WebSocketListener {
                 }
                 return;
             }
+            case "ping": {
+                outbound.getRemote().sendString("{\"msgType\":\"pong\"}", null);
+                return;
+            }
         }
 
         LOG.error("unknown message " + message);

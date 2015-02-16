@@ -13,20 +13,32 @@
 <script src="/ladda/ladda.min.js"></script>
 <script type="text/javascript">
 	var g_cluster_name = '${param.cluster}';
-	var g_running_queries = {};
+	var g_rq = {};
 	var g_rq_update = 0;
-	var g_complete_queries = [];
+	var g_cq = [];
 	var g_rq_table = null;
 
 	function cancelQuery(q, l) {
 		l.start();
 		q.cancelling = true;
+		console.log("cancel : " + q.cancelUrl);
 		$.getJSON(q.cancelUrl, function(result) {
 			l.stop();
+			var resultTxt;
+			var timeoutVal;
+			if (result.result == 'ok') {
+				resultTxt = 'Cancelled';
+				timeoutVal = 3000;
+			}
+			else {
+				resultTxt = 'Error';
+				timeoutVal = 10000;
+			}
+			$('#'+q.cuqId + ' .q-cancel a .ladda-label', g_rq_table).text(resultTxt);
 			setTimeout( function() {
-				delete(g_running_queries[q.cuqId]);
+				delete(g_rq[q.cuqId]);
 				$('#'+q.cuqId).remove();
-			}, 3000);
+			}, timeoutVal);
 		});
 	}
 
@@ -53,15 +65,15 @@
 			+'</td><td class="q-elapsed">'+((new Date()) - q.startTime)
 			+'</td><td class="q-cancel"><a href="#" class="btn btn-primary btn-xs ladda-button" data-style="zoom-in" data-size="xs" data-spinner-size="28" data-spinner-color="#ffffff" data-cuqId="'+ q.cuqId+'"><span class="ladda-label">Cancel</span></a>'+'</td></tr>';
 //						+'</td><td class="q-cancel"><a href="#" onclick="cancelQuery(\''+q.cuqId+'\',\''+q.cancelUrl+'\');">Cancel</a>'+'</td></tr>';
-			g_running_queries[q.cuqId] = q;
+			g_rq[q.cuqId] = q;
 			$(g_rq_table).append(contents);
 			$('#'+q.cuqId + ' .q-cancel a', g_rq_table).click(function(e) {
 				e.preventDefault();
 				cuqId = this.getAttribute("data-cuqId");
-				var q = g_running_queries[cuqId];
+				var q = g_rq[cuqId];
 				if (q) {
 					var l = Ladda.create(this);
-					cancelQuery(cuqId, l);
+					cancelQuery(q, l);
 				}
 			});
 		}
@@ -69,7 +81,7 @@
 
 	function removeRunningQuery(cuqId) {
 		$('#'+cuqId, g_rq_table).remove();
-		delete(g_running_queries[cuqId]);
+		delete(g_rq[cuqId]);
 	}
 
 	function getRunningQueries() {
@@ -85,8 +97,8 @@
 				}
 
 				// remove disappeared query
-				for (var cuqId in g_running_queries) {
-					if (g_running_queries[cuqId].cancelling == true)
+				for (var cuqId in g_rq) {
+					if (g_rq[cuqId].cancelling == true)
 						continue;
 
 					if (!(cuqId in rqmap)) {
@@ -105,9 +117,9 @@
 	{
 		$.getJSON('/api/qc/completeQueries?cluster='+g_cluster_name, function(result) {
 			var contents = '';
-			g_complete_queries = result;
-			for (var i=0; i<g_complete_queries.length; i++) {
-				var q = g_complete_queries[i];
+			g_cq = result;
+			for (var i=0; i<g_cq.length; i++) {
+				var q = g_cq[i];
 				contents += '<tr id="' + q.cuqId + '"><td>'+q.server+'</td><td>'+q.id+'</td><td>'
 					+q.backend+'</td><td>'+q.user+'</td><td>'+q.statement+'</td><td>'
 					+q.state+'</td><td>'+q.client+'</td><td>'+q.rowCnt+'</td><td>'
@@ -121,6 +133,7 @@
 	var g_websocket = null;
 	function initWebSocket() {
 		if (g_websocket != null) {
+			g_websocket.onclose = function() {};
 			g_websocket.close();
 		}
 
@@ -140,19 +153,37 @@
 						addRunningQuery(msg.query);
 						break;
 					case 'runningQueryRemoved':
-						removeRunningQuery(msg.cuqId);
+						if (g_rq[msg.cuqId].cancelling != true)
+							removeRunningQuery(msg.cuqId);
+						break;
+					case 'pong':
 						break;
 					default:
 						console.log('unknown ws msg ' + e.data);
+						this.close();
+						break;
 				}
 			}
 			catch (ex) {
 				console.log('error parsing msg',msg, ex);
+				this.close();
 			}
 		};
-		g_websocket.onclose= function() {
+		g_websocket.onclose = function() {
 			console.log('websocket closed');
+			g_websocket = null;
+			setTimeout(pingWebSocket, 5*1000);
 		};
+	}
+
+	function pingWebSocket() {
+		if (g_websocket == null) {
+			initWebSocket();
+		}
+		else {
+			var ping = {'request':'ping'};
+			g_websocket.send(JSON.stringify(ping));
+		}
 	}
 
 	$(function() {
@@ -169,10 +200,9 @@
 			getCompleteQueries();
 			initWebSocket();
 
-			setInterval(function() {
-				getRunningQueries();
-				getCompleteQueries();
-			}, 10*1000); // full update every 10 seconds;
+			setInterval(pingWebSocket, 60*1000);
+			setInterval(getCompleteQueries, 10*1000);
+			setInterval(getRunningQueries, 30*1000);
 		}
 	});
 
