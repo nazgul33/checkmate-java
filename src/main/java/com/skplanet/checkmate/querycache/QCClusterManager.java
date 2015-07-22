@@ -2,14 +2,11 @@ package com.skplanet.checkmate.querycache;
 
 import org.apache.commons.configuration.ConfigurationException;
 import org.apache.commons.configuration.HierarchicalINIConfiguration;
-
 import org.apache.commons.configuration.SubnodeConfiguration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.servlet.AsyncContext;
 import java.util.*;
-import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
@@ -21,8 +18,8 @@ public class QCClusterManager {
 
     private Map<String, QCCluster.Options> clusterConfigMap = new HashMap<>();
 
-    private int partialUpdateInterval = 3 * 1000;
     private int fullUpdateInterval = 10 * 1000;
+    private int pingWebSocketsInterval = 30 * 1000;
 
     private void readConfiguration() {
         String home = System.getenv("QC_HOME");
@@ -39,7 +36,6 @@ public class QCClusterManager {
             SubnodeConfiguration globalSection = clusterConfigFile.getSection(null);
             globalSection.setThrowExceptionOnMissing(true);
             clusterNames = globalSection.getStringArray("Clusters");
-            partialUpdateInterval = globalSection.getInt("PartialUpdateInterval");
             fullUpdateInterval = globalSection.getInt("FullUpdateInterval");
 
             for (String cn: clusterNames) {
@@ -69,60 +65,33 @@ public class QCClusterManager {
                     LOG.warn("a full update task is running. skipping full update task");
                     return;
                 }
-                int waitCount = 0;
-                while ( (!QCClusterThread.this.partialUpdateTaskRunning.compareAndSet(false, true)) && waitCount < 10 ) {
-                    // update task is running. skip this time....
-                    LOG.warn("a partial update task is running. waiting 0.5 sec");
-                    waitCount++;
-                    try {
-                        Thread.sleep(500);
-                    } catch (Exception e) {
-                        // exception while sleeping.
-                    }
-                }
-                if (waitCount >= 10 && QCClusterThread.this.partialUpdateTaskRunning.get() == false) {
-                    LOG.warn("full update waited to long. skipping");
-                    QCClusterThread.this.fullUpdateTaskRunning.set(false);
-                    return;
-                }
 
                 QCClusterManager.qcMgr.UpdateClusters(false);
                 lastFullUpdate = new Date();
                 QCClusterThread.this.fullUpdateTaskRunning.set(false);
-                QCClusterThread.this.partialUpdateTaskRunning.set(false);
             }
         }
-        private class QCClusterPartialUpdateTask extends TimerTask {
+
+        private class QCClusterWebSocketPingTask extends TimerTask {
             @Override
             public void run() {
-                if ( QCClusterThread.this.fullUpdateTaskRunning.get() == true ) {
-                    // update task is running. skip this time....
-                    LOG.warn("a full update task is running. skipping partial update task");
-                    return;
-                }
-                if ( !QCClusterThread.this.partialUpdateTaskRunning.compareAndSet(false, true) ) {
-                    // update task is running. skip this time....
-                    LOG.warn("a partial update task is running. skipping partial update task");
-                }
-                QCClusterManager.qcMgr.UpdateClusters(true);
-                lastPartialUpdate = new Date();
-                QCClusterThread.this.partialUpdateTaskRunning.set(false);
+                QCClusterManager.qcMgr.pingWebSockets();
             }
         }
+
         TimerTask qcTimerFull = new QCClusterFullUpdateTask();
-        TimerTask qcTimerPartial = new QCClusterPartialUpdateTask();
+        TimerTask qcTimerPingWebSockets = new QCClusterWebSocketPingTask();
+
         AtomicBoolean fullUpdateTaskRunning = new AtomicBoolean(false);
-        AtomicBoolean partialUpdateTaskRunning = new AtomicBoolean(false);
         Date lastFullUpdate = new Date();
-        Date lastPartialUpdate = new Date();
 
         @Override
         public void run() {
             Timer timerFull = new Timer(true);
-            Timer timerPartial = new Timer(true);
+            Timer timerPingWebSockets = new Timer(true);
 
             timerFull.scheduleAtFixedRate(qcTimerFull, 0, fullUpdateInterval);
-            timerPartial.scheduleAtFixedRate(qcTimerPartial, 0, partialUpdateInterval);
+            timerPingWebSockets.scheduleAtFixedRate(qcTimerPingWebSockets, 0, pingWebSocketsInterval);
 
             while (!QCClusterManager.this.quitThread) {
                 try {
@@ -132,7 +101,7 @@ public class QCClusterManager {
             }
 
             timerFull.cancel();
-            timerPartial.cancel();
+            timerPingWebSockets.cancel();
         }
     }
 
@@ -182,57 +151,9 @@ public class QCClusterManager {
 
     public QCCluster getCluster(String clusterName) {
         for (QCCluster c: clusters) {
-            if (clusterName.equals(c.name)) {
+            if (c.name.equals(clusterName)) {
                 return c;
             }
-        }
-        return null;
-    }
-
-    public Collection<QCQuery.QueryExport> getExportedRunningQueries(String clusterName) {
-        QCCluster c = getCluster(clusterName);
-        if (c!=null) {
-            return c.getExportedRunningQueries();
-        }
-        return null;
-    }
-
-    public Collection<QCQuery.QueryExport> getExportedCompleteQueries(String clusterName) {
-        QCCluster c = getCluster(clusterName);
-        if (c!=null) {
-            return c.getExportedCompleteQueries();
-        }
-        return null;
-    }
-
-    public long getLastUpdateTime(String clusterName) {
-        QCCluster c = getCluster(clusterName);
-        if (c!=null) {
-            return c.getLastUpdateTime();
-        }
-        return -1;
-    }
-
-    private ConcurrentLinkedQueue<AsyncContext> asyncRQList = new ConcurrentLinkedQueue<>();
-    public void addAsyncContextRQ(AsyncContext async, String clusterName) {
-        QCCluster c = getCluster(clusterName);
-        if (c!=null) {
-            c.addAsyncContextRQ(async);
-        }
-    }
-
-    public Collection<QCCluster.SystemInfo> getSystemInfoList(String clusterName) {
-        QCCluster c = getCluster(clusterName);
-        if (c!=null) {
-            return c.getSystemInfo();
-        }
-        return null;
-    }
-
-    public Collection<QCCluster.PoolInfo> getPoolInfoList(String clusterName) {
-        QCCluster c = getCluster(clusterName);
-        if (c!=null) {
-            return c.getPoolInfo();
         }
         return null;
     }
@@ -243,5 +164,19 @@ public class QCClusterManager {
             cl.add(c.name);
         }
         return cl;
+    }
+
+    private void pingWebSockets() {
+        for (QCCluster cluster: clusters) {
+            for (QCServer server: cluster.getServers().values()) {
+                QCClientWebSocket ws = server.getRtWebSocket();
+                if (ws == null) {
+                    server.connectRealtimeWebSocket();
+                }
+                else {
+                    ws.ping();
+                }
+            }
+        }
     }
 }

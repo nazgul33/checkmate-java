@@ -51,6 +51,7 @@ public class QCQuery {
 
     private QCServer server;
 
+    public final String cuqId;
     public final String id;
     public final String backend;
     public final String user;
@@ -86,13 +87,15 @@ public class QCQuery {
         this.fetchProfile = qObj.fetchProfile;
 
         this.updateTime = new Date().getTime();
+
+        this.cuqId = getCuqId();
     }
 
-    public boolean Update(QueryImport qObj) {
+    public boolean Update(QCQuery qObj) {
         boolean updated = false;
-        if ( this.state != qObj.stmtState ) {
-            if (DEBUG) System.console().printf("query %s update state %s -> %s\n", id, state, qObj.stmtState);
-            this.state = qObj.stmtState;
+        if ( !this.state.equals(qObj.state) ) {
+            if (DEBUG) System.console().printf("query %s update state %s -> %s\n", id, state, qObj.state);
+            this.state = qObj.state;
             updated = true;
         }
         if ( this.rowCnt != qObj.rowCnt ) {
@@ -120,13 +123,13 @@ public class QCQuery {
     }
 
     public String getCuqId() {
-        String cuqid = new String(Base64.encodeBase64((server.name+id+backend).trim().toUpperCase().getBytes()));
+        String cuqid = new String(Base64.encodeBase64((server.name+backend+id).trim().toUpperCase().getBytes()));
         return cuqid.replace('+',':').replace('/','.').replace('=','-');
     }
 
     public QueryExport export() {
         QueryExport eq = new QueryExport();
-        eq.cuqId = getCuqId();
+        eq.cuqId = cuqId;
         // remove characters not supported by html4 standard for id field.
 
         eq.server = server.name;

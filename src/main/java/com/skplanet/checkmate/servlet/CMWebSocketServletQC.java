@@ -14,6 +14,6 @@ public class CMWebSocketServletQC extends WebSocketServlet {
     @Override
     public void configure(WebSocketServletFactory factory) {
         factory.getPolicy().setIdleTimeout(120*1000); // 2min
-        factory.register(CMWebSocketQC.class);
+        factory.register(CMQCServerWebSocket.class);
     }
 }

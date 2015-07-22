@@ -1,13 +1,11 @@
 package com.skplanet.checkmate.querycache;
 
 import com.google.gson.Gson;
-import com.skplanet.checkmate.servlet.CMWebSocketQC;
+import com.skplanet.checkmate.servlet.CMQCServerWebSocket;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.servlet.AsyncContext;
 import java.util.*;
-import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
@@ -28,8 +26,6 @@ public class QCCluster {
     public final String name;
     private Map<String, QCServer> servers;
     private Options opt;
-    private long lastUpdate = 0;
-    ConcurrentLinkedQueue<AsyncContext> asyncRQList = new ConcurrentLinkedQueue<>();
 
     public QCCluster(String name, Options opt) {
         this.name = name;
@@ -50,21 +46,15 @@ public class QCCluster {
     }
 
     public QCServer getServer(String name) {
-        if (servers.containsKey(name)) {
-            return servers.get(name);
-        }
-        return null;
+        return servers.get(name);
     }
 
     public void Update(boolean partial) {
         // update all servers
-        boolean updated = false;
         Date start = new Date();
         for (Map.Entry<String, QCServer> entry : servers.entrySet()) {
             QCServer server = entry.getValue();
-            if (server.Update(partial)) {
-                updated = true;
-            }
+            server.Update(partial);
 
             // sysinfo update only if it's not partial update
             if (!partial) {
@@ -100,22 +90,8 @@ public class QCCluster {
         if (DEBUG) {
             LOG.debug("Updating cluster " + name + " took " + (end.getTime() - start.getTime()) + " ms" + (partial ? " (partial)" : ""));
         }
-        if (updated) {
-            lastUpdate = new Date().getTime();
-            // dispatch queued async jobs.
-            for (AsyncContext async: asyncRQList) {
-                async.dispatch();
-            }
-            asyncRQList.clear();
-        }
 
-        if (!partial) {
-            refreshExportedCompleteQueries();
-        }
-    }
-
-    public long getLastUpdateTime() {
-        return lastUpdate;
+        refreshExportedCompleteQueries();
     }
 
     public Options getOpt() {
@@ -184,13 +160,12 @@ public class QCCluster {
         Collections.sort(ql, new Comparator<QCQuery.QueryExport>() {
             @Override
             public int compare(QCQuery.QueryExport o1, QCQuery.QueryExport o2) {
-                return ((o2.startTime - o1.startTime) < 0) ? -1 : (o2.startTime == o1.startTime) ? 0 : 1;
+                return ((o1.startTime - o2.startTime) < 0) ? -1 : (o1.startTime == o2.startTime) ? 0 : 1;
             }
         });
         return ql;
     }
 
-    // TODO: paging
     private List<QCQuery.QueryExport> exportedCompleteQueries = new ArrayList<>();
     private void refreshExportedCompleteQueries() {
         List<QCQuery.QueryExport> ql = new ArrayList<>();
@@ -212,6 +187,7 @@ public class QCCluster {
         }
     }
 
+    // TODO: getting subset of complete queries
     public Collection<QCQuery.QueryExport> getExportedCompleteQueries() {
         List<QCQuery.QueryExport> ql = new ArrayList<>();
         synchronized (exportedCompleteQueries) {
@@ -219,11 +195,6 @@ public class QCCluster {
         }
         return ql;
     }
-
-    public void addAsyncContextRQ(AsyncContext async) {
-        asyncRQList.add(async);
-    }
-
 
     static public class SystemInfo {
         public String server;
@@ -268,9 +239,9 @@ public class QCCluster {
         return l;
     }
 
-    private Map<Integer, CMWebSocketQC> realtimeMessageReceivers = new HashMap<>();
+    private Map<Integer, CMQCServerWebSocket> realtimeMessageReceivers = new HashMap<>();
     AtomicInteger realtimeMessageReceiversId = new AtomicInteger(0);
-    public int subscribe(CMWebSocketQC ws) {
+    public int subscribe(CMQCServerWebSocket ws) {
         int id = realtimeMessageReceiversId.getAndAdd(1);
         realtimeMessageReceivers.put(id, ws);
         return id;
@@ -282,7 +253,7 @@ public class QCCluster {
         if ( realtimeMessageReceivers.size() > 0 ) {
             Gson gson = new Gson();
             String msg = gson.toJson(evt);
-            for (CMWebSocketQC ws: realtimeMessageReceivers.values()) {
+            for (CMQCServerWebSocket ws: realtimeMessageReceivers.values()) {
                 ws.sendMessage(msg);
             }
         }

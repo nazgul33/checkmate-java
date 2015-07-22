@@ -19,8 +19,8 @@
 			var html_jvm = '';
 			var html_system = '';
 			var html_threads = '';
-			for (var i=0; i<r.length; i++) {
-				var s = r[i];
+			for (var i=0; i<r.data.length; i++) {
+				var s = r.data[i];
 				html_jvm += '<tr><td>'+s.server+'</td><td>'+s.jvm.nProcessors+'</td><td>'+humanReadable(s.jvm.memFree)+'</td><td>';
 				html_jvm += humanReadable(s.jvm.memTotal-s.jvm.memFree)+'</td><td>';
 				html_jvm += ((s.jvm.memMax==-1)? 'Unlimited':humanReadable(s.jvm.memMax))+'</td></tr>';
@@ -29,8 +29,8 @@
 				html_system += parseInt(s.system.loadProcess*100)+'%</td><td>';
 				html_system += humanReadable(s.system.memPhysFree)+'</td><td>';
 				html_system += humanReadable(s.system.memPhysTotal)+'</td></tr>';
-				// html_system += '<tr><td>Total Swap</td><td>'+humanReadable(r.system.swapTotal)+'</td></tr>';
-				// html_system += '<tr><td>Free Swap</td><td>'+humanReadable(r.system.swapFree)+'</td></tr>';
+				// html_system += '<tr><td>Total Swap</td><td>'+humanReadable(s.system.swapTotal)+'</td></tr>';
+				// html_system += '<tr><td>Free Swap</td><td>'+humanReadable(s.system.swapFree)+'</td></tr>';
 
 				html_threads += '<tr><td>'+s.server+'</td><td>'+s.threads.totalThreads+'</td><td>';
 				html_threads += (s.threads.handlerThreads - s.threads.handlerThreadsIdle)+'</td></tr>';
@@ -45,6 +45,7 @@
 
 	$(function() {
 		$('#header-title').html('<span style="color:white; font-weight: bold;">QueryCache :: System</span>');
+		$('#headerMenuSystem').removeClass('btn-primary').addClass('btn-warning').attr('disabled', 'disabled');
 
 		if (g_cluster_name == null || g_cluster_name.length == 0) {
 			<c:if test="${fn:length(clusters.qcClusters) > 0}">

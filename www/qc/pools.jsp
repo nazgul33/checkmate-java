@@ -13,18 +13,18 @@
 	var g_cluster_name = '${param.cluster}';
 
 	function getAll() {
-		$.getJSON('/api/qc/poolInfoList?cluster='+g_cluster_name, function(result) {
+		$.getJSON('/api/qc/poolInfoList?cluster='+g_cluster_name, function(r) {
 			var c1 = '';
-			for (var i=0; i<result.length; i++) {
-				var p = result[i].objPool;
-				c1 += '<tr><td>'+result[i].server+'</td><td>'+p.poolSize[0]+'</td><td>'+p.poolSize[1]+
+			for (var i=0; i<r.data.length; i++) {
+				var p = r.data[i].objPool;
+				c1 += '<tr><td>'+r.data[i].server+'</td><td>'+p.poolSize[0]+'</td><td>'+p.poolSize[1]+
 				'</td><td>'+p.poolSize[2]+'</td><td>'+p.poolSize[3]+'</td></tr>';
 			}
 			var c2 = '';
-			for (var i=0; i<result.length; i++) {
-				var p = result[i].connPoolList;
+			for (var i=0; i<r.data.length; i++) {
+				var p = r.data[i].connPoolList;
 				for (var j=0; j<p.length; j++) {
-					c2 += '<tr><td>'+((j==0)?result[i].server:'&nbsp;')+'</td><td>'+p[j].driver+'</td><td>'+
+					c2 += '<tr><td>'+((j==0)?r.data[i].server:'&nbsp;')+'</td><td>'+p[j].driver+'</td><td>'+
 					p[j].free+'</td><td>'+p[j].using+'</td></tr>';
 				}
 			}
@@ -36,6 +36,7 @@
 
 	$(function() {
 		$('#header-title').html('<span style="color:white; font-weight: bold;">QueryCache :: Pools</span>');
+		$('#headerMenuPools').removeClass('btn-primary').addClass('btn-warning').attr('disabled', 'disabled');
 
 		if (g_cluster_name == null || g_cluster_name.length == 0) {
 			<c:if test="${fn:length(clusters.qcClusters) > 0}">

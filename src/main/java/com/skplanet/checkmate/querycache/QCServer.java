@@ -5,7 +5,12 @@ import com.google.gson.reflect.TypeToken;
 import com.skplanet.checkmate.utils.HttpUtil;
 
 import java.net.ConnectException;
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.util.*;
+
+import org.eclipse.jetty.websocket.client.ClientUpgradeRequest;
+import org.eclipse.jetty.websocket.client.WebSocketClient;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -88,6 +93,8 @@ public class QCServer {
         queriesComplete = new HashMap<>();
         online = false;
         this.cluster = cluster;
+
+        connectRealtimeWebSocket();
     }
 
     public boolean isOnline() {
@@ -114,29 +121,47 @@ public class QCServer {
         return ql;
     }
 
-    public boolean Update(boolean partial) {
+    public void Update(boolean partial) {
         if (partial) {
-            if (this.queriesRunning.size() > 0) {
-                UpdateQueries(true);
-                lastQueryUpdate = new Date().getTime();
-                return true;
-            }
-            return false;
+            UpdateQueries();
+            lastQueryUpdate = new Date().getTime();
         }
 
-        UpdateQueries(false);
+        UpdateQueries();
         lastQueryUpdate = new Date().getTime();
         UpdateConnections();
         UpdateObjectPools();
         UpdateSystem();
-        return true;
     }
 
     protected String getUrl(String path) {
         return "http://" + this.name + ":" + cluster.getOpt().webPort + path;
     }
 
-    protected void UpdateQueries(boolean runningQueriesOnly) {
+    protected void processAddQueryEvent(QCQuery q) {
+        QCQuery qExisting;
+        synchronized (queriesRunning) {
+            qExisting = queriesRunning.get(q.cuqId);
+            if (qExisting != null) {
+                if( !qExisting.Update(q) ) {
+                    // not updated : do nothing
+                    return;
+                }
+            } else {
+                this.queriesRunning.put(q.cuqId, q);
+            }
+        }
+        this.cluster.addExportedRunningQuery(q);
+    }
+
+    protected void processRemoveQueryEvent(QCQuery q) {
+        synchronized (queriesRunning) {
+            this.queriesRunning.remove(q.cuqId);
+        }
+        this.cluster.removeExportedRunningQuery(q);
+    }
+
+    protected void UpdateQueries() {
         HttpUtil httpUtil = new HttpUtil();
         StringBuffer buf = new StringBuffer();
         int res = 0;
@@ -150,12 +175,16 @@ public class QCServer {
                     int added = 0;
                     int removed = 0;
                     int updated = 0;
-                    Map<String, QCQuery.QueryImport> rqMap = new HashMap<>();
+                    List<QCQuery> rqList = new ArrayList<>();
+                    Map<String, QCQuery> rqMap = new HashMap<>();
                     // process "current" running query list
-                    for (QCQuery.QueryImport q : queries.runningQueries) {
+                    for (QCQuery.QueryImport qi : queries.runningQueries) {
                         // add to map for reverse existence check below.
-                        rqMap.put(q.queryId, q);
+                        QCQuery q = new QCQuery(this, qi);
+                        rqList.add(q);
+                        rqMap.put(q.cuqId, q);
                     }
+
                     // cross check queries in my list to remove "disappeared" queries.
                     Iterator<Map.Entry<String, QCQuery>> it = queriesRunning.entrySet().iterator();
                     while (it.hasNext()) {
@@ -167,19 +196,17 @@ public class QCServer {
                         }
                     }
 
-                    for (QCQuery.QueryImport q : queries.runningQueries) {
-                        q.queryId = q.queryId.toLowerCase();
-                        if (this.queriesRunning.containsKey(q.queryId)) {
-                            QCQuery qExisting = this.queriesRunning.get(q.queryId);
+                    for (QCQuery q : rqList) {
+                        QCQuery qExisting = queriesRunning.get(q.cuqId);
+                        if (qExisting != null) {
                             if ( qExisting.Update(q) ) {
                                 updated++;
                                 this.cluster.addExportedRunningQuery(qExisting);
                             }
                         } else {
-                            QCQuery qNew = new QCQuery(this, q);
-                            this.queriesRunning.put(q.queryId, qNew);
+                            this.queriesRunning.put(q.cuqId, q);
                             added++;
-                            this.cluster.addExportedRunningQuery(qNew);
+                            this.cluster.addExportedRunningQuery(q);
                         }
                     }
 
@@ -187,39 +214,37 @@ public class QCServer {
                         LOG.debug(this.name + ": running queries +" + added + " #" + updated + " -" + removed);
                     }
                 }
-                if (runningQueriesOnly == false) {
-                    synchronized (queriesComplete) {
-                        int added = 0;
-                        int removed = 0;
-                        // process "current" complete query list
-                        for (QCQuery.QueryImport q : queries.completeQueries) {
-                            q.queryId = q.queryId.toLowerCase();
-                            // complete query has no changes. process new complete queries only.
-                            if (!this.queriesComplete.containsKey(q.queryId)) {
-                                QCQuery qNew = new QCQuery(this, q);
-                                this.queriesComplete.put(q.queryId, qNew);
-                                added++;
+                synchronized (queriesComplete) {
+                    int added = 0;
+                    int removed = 0;
+                    // process "current" complete query list
+                    for (QCQuery.QueryImport qi : queries.completeQueries) {
+                        QCQuery q = new QCQuery(this, qi);
+                        // complete query has no changes. process new complete queries only.
+                        if (!this.queriesComplete.containsKey(q.cuqId)) {
+                            this.queriesComplete.put(q.cuqId, q);
+                            added++;
+                        }
+                    }
+
+                    // remove oldest query. sort key is endTime
+                    if (this.queriesComplete.size() > MAX_COMPLETE_QUERIES) ;
+                    {
+                        ArrayList<QCQuery> cqList = new ArrayList<>(queriesComplete.size());
+                        cqList.addAll(queriesComplete.values());
+                        Collections.sort(cqList, new Comparator<QCQuery>() {
+                            @Override
+                            public int compare(QCQuery o1, QCQuery o2) {
+                                return ((o2.endTime - o1.endTime) < 0) ? -1 : (o2.endTime == o1.endTime) ? 0 : 1;
                             }
+                        });
+                        for (int i = cqList.size()-1; i >= MAX_COMPLETE_QUERIES; i--) {
+                            queriesComplete.remove(cqList.get(i).id);
+                            removed++;
                         }
-                        // remove oldest query. sort key is endTime
-                        if (this.queriesComplete.size() > MAX_COMPLETE_QUERIES) ;
-                        {
-                            ArrayList<QCQuery> cqList = new ArrayList<>(queriesComplete.size());
-                            cqList.addAll(queriesComplete.values());
-                            Collections.sort(cqList, new Comparator<QCQuery>() {
-                                @Override
-                                public int compare(QCQuery o1, QCQuery o2) {
-                                    return ((o2.startTime - o1.startTime) < 0) ? -1 : (o2.startTime == o1.startTime) ? 0 : 1;
-                                }
-                            });
-                            for (int i = cqList.size()-1; i >= MAX_COMPLETE_QUERIES; i--) {
-                                queriesComplete.remove(cqList.get(i).id);
-                                removed++;
-                            }
-                        }
-                        if (DEBUG) {
-                            LOG.debug(this.name + ": complete queries +" + added + " -" + removed);
-                        }
+                    }
+                    if (DEBUG) {
+                        LOG.debug(this.name + ": complete queries +" + added + " -" + removed);
                     }
                 }
             }
@@ -323,5 +348,29 @@ public class QCServer {
 
     public List<ConDesc> getConnections() {
         return connections;
+    }
+
+    private QCClientWebSocket rtWebSocket = null;
+    public QCClientWebSocket getRtWebSocket() {
+        return rtWebSocket;
+    }
+    public void removeRtWebSocket() {
+        rtWebSocket = null;
+    }
+    public void connectRealtimeWebSocket() {
+        String uri = "ws://" + this.name + ":" + cluster.getOpt().webPort + "/api/websocket";
+        WebSocketClient c = new WebSocketClient();
+        QCClientWebSocket s = new QCClientWebSocket(this);
+        try {
+            c.start();
+            URI rtUri = new URI(uri);
+            ClientUpgradeRequest req = new ClientUpgradeRequest();
+            c.connect(s, rtUri, req);
+            rtWebSocket = s;
+        } catch (URISyntaxException e) {
+            LOG.error("invalid uri " + uri, e);
+        } catch (Exception e) {
+            LOG.error("websocket client error", e);
+        }
     }
 }

@@ -14,7 +14,6 @@
 <script type="text/javascript">
 	var g_cluster_name = '${param.cluster}';
 	var g_rq = {};
-	var g_rq_update = 0;
 	var g_cq = [];
 	var g_rq_table = null;
 
@@ -62,7 +61,7 @@
 			+'</td><td class="q-client">'+q.client
 			+'</td><td class="q-rowcnt">'+q.rowCnt
 			+'</td><td class="q-starttime">'+formatDate(new Date(q.startTime))
-			+'</td><td class="q-elapsed">'+((new Date()) - q.startTime)
+			+'</td><td class="q-elapsed">'+(((new Date()) - q.startTime)/1000).toFixed(1)
 			+'</td><td class="q-cancel"><a href="#" class="btn btn-primary btn-xs ladda-button" data-style="zoom-in" data-size="xs" data-spinner-size="28" data-spinner-color="#ffffff" data-cuqId="'+ q.cuqId+'"><span class="ladda-label">Cancel</span></a>'+'</td></tr>';
 //						+'</td><td class="q-cancel"><a href="#" onclick="cancelQuery(\''+q.cuqId+'\',\''+q.cancelUrl+'\');">Cancel</a>'+'</td></tr>';
 			g_rq[q.cuqId] = q;
@@ -79,19 +78,25 @@
 		}
 	}
 
+	function updateElapsedTimeRQ() {
+		$('.q-elapsed', g_rq_table).each(function () {
+			var t = Number($(this).text());
+			$(this).text((t+0.1).toFixed(1));
+		});
+	}
+
 	function removeRunningQuery(cuqId) {
 		$('#'+cuqId, g_rq_table).remove();
 		delete(g_rq[cuqId]);
 	}
 
 	function getRunningQueries() {
-		$.ajax( '/api/qc/runningQueries?cluster='+g_cluster_name+'&lastUpdate='+g_rq_update, {
+		$.ajax( '/api/qc/runningQueries?cluster='+g_cluster_name, {
 			timeout:20000,
-			success:function(data, ts, xhr) {
+			success:function(r, ts, xhr) {
 				var rqmap = {};
-				g_rq_update = data.time;
-				for (var i=0; i<data.rq.length; i++) {
-					var q = data.rq[i];
+				for (var i=0; i<r.data.length; i++) {
+					var q = r.data[i];
 					addRunningQuery(q);
 					rqmap[q.cuqId] = q;
 				}
@@ -115,16 +120,16 @@
 
 	function getCompleteQueries()
 	{
-		$.getJSON('/api/qc/completeQueries?cluster='+g_cluster_name, function(result) {
+		$.getJSON('/api/qc/completeQueries?cluster='+g_cluster_name, function(r) {
 			var contents = '';
-			g_cq = result;
+			g_cq = r.data;
 			for (var i=0; i<g_cq.length; i++) {
 				var q = g_cq[i];
 				contents += '<tr id="' + q.cuqId + '"><td>'+q.server+'</td><td>'+q.id+'</td><td>'
 					+q.backend+'</td><td>'+q.user+'</td><td>'+q.statement+'</td><td>'
 					+q.state+'</td><td>'+q.client+'</td><td>'+q.rowCnt+'</td><td>'
 					+formatDate(new Date(q.startTime))+'</td><td>'
-					+(q.endTime - q.startTime)+'</td></tr>';
+					+((q.endTime - q.startTime)/1000).toFixed(1)+'</td></tr>';
 			}
 			$('#queriescomplete tbody').html(contents);
 		});
@@ -186,8 +191,24 @@
 		}
 	}
 
+	var g_timer_cq = null;
+	function toggleRefreshCQ() {
+		if (g_timer_cq != null) {
+			clearInterval(g_timer_cq);
+			g_timer_cq = null;
+			$('#togglerefreshcq').text('Start Refresh');
+			$('#imgcqrefreshinprogress').hide();
+		}
+		else {
+			g_timer_cq = setInterval(getCompleteQueries, 5*1000);
+			$('#togglerefreshcq').text('Stop Refresh');
+			$('#imgcqrefreshinprogress').show();
+		}
+	}
+
 	$(function() {
 		$('#header-title').html('QueryCache :: Queries</span>');
+		$('#headerMenuQueries').removeClass('btn-primary').addClass('btn-warning').attr('disabled', 'disabled');
 
 		if (g_cluster_name == null || g_cluster_name.length == 0) {
 			<c:if test="${fn:length(clusters.qcClusters) > 0}">
@@ -201,8 +222,10 @@
 			initWebSocket();
 
 			setInterval(pingWebSocket, 60*1000);
-			setInterval(getCompleteQueries, 10*1000);
-			setInterval(getRunningQueries, 30*1000);
+			//setInterval(getRunningQueries, 30*1000);
+			setInterval(updateElapsedTimeRQ, 100);
+
+			toggleRefreshCQ();
 		}
 	});
 
@@ -221,7 +244,7 @@
 	</div>
 
 	<div style="width: 90%; text-align:left; position: relative;">
-		<H2>Complete Queries</H2>
+		<H2>Complete Queries  <a class="btn btn-primary btn-xs" href="#" onclick="toggleRefreshCQ();" id="togglerefreshcq"></a> <img id="imgcqrefreshinprogress" src="/images/inprogress.gif" /></H2>
 		<table class="table table-striped small" id="queriescomplete">
 			<thead><tr>
 				<th>server</th><th>id</th><th>type</th><th>user</th><th>statement</th><th>state</th><th>client ip</th><th>rows</th><th>startTime</th><th>elapsedTime</th>

@@ -43,4 +43,5 @@ export CLASSPATH
 JVMARGS=${JVMARGS-"-enableassertions -enablesystemassertions -XX:+UseConcMarkSweepGC -XX:+UseParNewGC -XX:+CMSParallelRemarkEnabled -XX:CMSInitiatingOccupancyFraction=70 -XX:+UseCMSInitiatingOccupancyOnly -Xms256m -Xmx512m -DCM_HOME=${CM_HOME}"}
 #JVMARGS=${JVMARGS-"-enableassertions -enablesystemassertions -XX:+UseConcMarkSweepGC -XX:+UseParNewGC -XX:+CMSParallelRemarkEnabled -XX:CMSInitiatingOccupancyFraction=70 -XX:+UseCMSInitiatingOccupancyOnly -Xms5g -Xmx5g -XX:+PrintGCDetails -XX:+PrintGCTimeStamps -verbose:gc -Xloggc:$CM_HOME/logs/checkmate-gc-$(date +%Y%m%d-%H%M%S).log"}
 
+echo java $JVMARGS -classpath "$CLASSPATH" com.skplanet.checkmate.CheckMateServer "$@"
 java $JVMARGS -classpath "$CLASSPATH" com.skplanet.checkmate.CheckMateServer "$@"

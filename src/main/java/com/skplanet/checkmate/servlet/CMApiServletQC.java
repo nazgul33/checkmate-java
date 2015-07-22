@@ -30,7 +30,6 @@ public class CMApiServletQC extends HttpServlet {
     private static final String ASYNC_REQ_ATTR = CMApiServletQC.class.getName() + ".async";
     private static final String ASYNC_RETURN_ATTR = CMApiServletQC.class.getName() + ".async.return";
     protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
-//        response.setContentType("application/json; charset=utf-8");
         response.setContentType("application/json; charset=utf-8");
 
         if (DEBUG) {
@@ -39,6 +38,11 @@ public class CMApiServletQC extends HttpServlet {
 
         PrintWriter writer = response.getWriter();
         String path = request.getRequestURI().substring(request.getContextPath().length());
+        String urlWithParameter = request.getRequestURI();
+        if (request.getQueryString() != null) {
+            urlWithParameter += "?" + request.getQueryString();
+        }
+
         QCClusterManager qcMgr = QCClusterManager.getInstance();
         Gson gson = new Gson();
         switch (path) {
@@ -46,132 +50,106 @@ public class CMApiServletQC extends HttpServlet {
                 Collection<String> cl = qcMgr.getClusterList();
                 Type qListType = new TypeToken<Collection<String>>() {}.getType();
                 String jsonObj = gson.toJson(cl, qListType);
-                writer.print(jsonObj);
+                writer.printf("{\"result\":\"ok\", \"msg\":\"ok\", \"data\":%s}", jsonObj);
                 response.setStatus(HttpServletResponse.SC_OK);
                 break;
             }
             case "/runningQueries": {
-                String cluster = request.getParameter("cluster");
-//                String server = request.getParameter("server");
-
-                // if async marker is not set, check update time and initiate async
-                if ( request.getAttribute(ASYNC_REQ_ATTR) == null ) {
-                    long clientLastUpdate;
-                    try {
-                        clientLastUpdate = Long.valueOf(request.getParameter("lastUpdate"), 10);
-                    } catch (NumberFormatException e) {
-                        clientLastUpdate = 0;
-                    }
-                    long myLastUpdate = qcMgr.getLastUpdateTime(cluster);
-                    if (myLastUpdate < 0) {
-                        LOG.error(request.getRequestURI() + " cluster " + cluster + " not found");
-                        response.setStatus(HttpServletResponse.SC_NOT_FOUND);
-                        break;
-                    }
-
-                    if (myLastUpdate <= clientLastUpdate) {
-                        // wait for next update
-                        final AsyncContext async = request.startAsync();
-                        final Boolean asyncYes = new Boolean(true);
-                        request.setAttribute(ASYNC_REQ_ATTR, asyncYes);
-                        async.setTimeout(20000);
-                        qcMgr.addAsyncContextRQ(async, cluster);
-                        return;
-                    }
-                }
-
-                Collection<QCQuery.QueryExport> ql = qcMgr.getExportedRunningQueries(cluster);
-                Type qListType = new TypeToken<Collection<QCQuery.QueryExport>>() {}.getType();
-                String jsonObj = gson.toJson(ql, qListType);
-                writer.printf("{\"time\":%d, \"rq\":%s}", new Date().getTime(), jsonObj);
-                response.setStatus(HttpServletResponse.SC_OK);
-                break;
-            }
-            case "/completeQueries": {
-                String cluster = request.getParameter("cluster");
-//                String server = request.getParameter("server");
-                Collection<QCQuery.QueryExport> ql = qcMgr.getExportedCompleteQueries(cluster);
-
-                // TODO: paging, filtering
-//                int page_size = 100;
-//                int page_number = 0;
-//                int lastIdx = (page_number + 1)*page_size;
-//                if (lastIdx > ql.size() )
-//                    lastIdx = ql.size();
-//                if (page_number*page_size > ql.size()) {
-//                    // page out of bound
-//                    return
-//                }
-//                return ql.subList(page_number*page_size, (page_number + 1)*page_size);
-
-                if (ql != null) {
+                QCCluster c = qcMgr.getCluster(request.getParameter("cluster"));
+                if (c!=null) {
+                    Collection<QCQuery.QueryExport> ql = c.getExportedRunningQueries();
                     Type qListType = new TypeToken<Collection<QCQuery.QueryExport>>() {
                     }.getType();
                     String jsonObj = gson.toJson(ql, qListType);
-                    writer.print(jsonObj);
+                    writer.printf("{\"result\":\"ok\", \"msg\":\"ok\", \"data\":%s}", jsonObj);
                     response.setStatus(HttpServletResponse.SC_OK);
                 }
                 else {
-                    LOG.error(request.getRequestURI() + " cluster " + cluster + " not found");
-                    response.setStatus(HttpServletResponse.SC_NOT_FOUND);
+                    LOG.error(urlWithParameter + " : invalid parameter");
+                    writer.print("{\"result\":\"error\", \"msg\":\"invalid parameter\"}");
+                    response.setStatus(HttpServletResponse.SC_BAD_REQUEST);
+                }
+                break;
+            }
+
+            case "/completeQueries": {
+                QCCluster c = qcMgr.getCluster(request.getParameter("cluster"));
+                if (c!=null) {
+                    Collection<QCQuery.QueryExport> ql = c.getExportedCompleteQueries();
+
+                    /*
+                    // TODO: paging, filtering
+                    int page_size = 100;
+                    int page_number = 0;
+                    int lastIdx = (page_number + 1)*page_size;
+                    if (lastIdx > ql.size() )
+                        lastIdx = ql.size();
+                    if (page_number*page_size > ql.size()) {
+                        // page out of bound
+                        return
+                    }
+                    return ql.subList(page_number*page_size, (page_number + 1)*page_size);
+                    */
+
+                    Type qListType = new TypeToken<Collection<QCQuery.QueryExport>>() {}.getType();
+                    String jsonObj = gson.toJson(ql, qListType);
+                    writer.printf("{\"result\":\"ok\", \"msg\":\"ok\", \"data\":%s}", jsonObj);
+                    response.setStatus(HttpServletResponse.SC_OK);
+                }
+                else {
+                    LOG.error(urlWithParameter + " : invalid parameter");
+                    writer.print("{\"result\":\"error\", \"msg\":\"invalid parameter\"}");
+                    response.setStatus(HttpServletResponse.SC_BAD_REQUEST);
                 }
                 break;
             }
             case "/sysInfoList": {
-                String cluster = request.getParameter("cluster");
-                Collection<QCCluster.SystemInfo> l = qcMgr.getSystemInfoList(cluster);
-                if (l != null) {
+                QCCluster c = qcMgr.getCluster(request.getParameter("cluster"));
+                if (c!=null) {
+                    Collection<QCCluster.SystemInfo> l = c.getSystemInfo();
                     Type lType = new TypeToken<Collection<QCCluster.SystemInfo>>() {
                     }.getType();
                     String jsonObj = gson.toJson(l, lType);
-                    writer.print(jsonObj);
+                    writer.printf("{\"result\":\"ok\", \"msg\":\"ok\", \"data\":%s}", jsonObj);
                     response.setStatus(HttpServletResponse.SC_OK);
                 }
                 else {
-                    LOG.error(request.getRequestURI() + " cluster " + cluster + " not found");
-                    response.setStatus(HttpServletResponse.SC_NOT_FOUND);
+                    LOG.error(urlWithParameter + " : invalid parameter");
+                    writer.print("{\"result\":\"error\", \"msg\":\"invalid parameter\"}");
+                    response.setStatus(HttpServletResponse.SC_BAD_REQUEST);
                 }
                 break;
             }
             case "/poolInfoList": {
-                String cluster = request.getParameter("cluster");
-                Collection<QCCluster.PoolInfo> l = qcMgr.getPoolInfoList(cluster);
-                if (l != null) {
-                    Type lType = new TypeToken<Collection<QCCluster.PoolInfo>>() {
-                    }.getType();
+                QCCluster c = qcMgr.getCluster(request.getParameter("cluster"));
+                if (c != null) {
+                    Collection<QCCluster.PoolInfo> l = c.getPoolInfo();
+                    Type lType = new TypeToken<Collection<QCCluster.PoolInfo>>() {}.getType();
                     String jsonObj = gson.toJson(l, lType);
-                    writer.print(jsonObj);
+                    writer.printf("{\"result\":\"ok\", \"msg\":\"ok\", \"data\":%s}", jsonObj);
                     response.setStatus(HttpServletResponse.SC_OK);
                 }
                 else {
-                    LOG.error(request.getRequestURI() + " cluster " + cluster + " not found");
-                    response.setStatus(HttpServletResponse.SC_NOT_FOUND);
+                    LOG.error(urlWithParameter + " : invalid parameter");
+                    writer.print("{\"result\":\"error\", \"msg\":\"invalid parameter\"}");
+                    response.setStatus(HttpServletResponse.SC_BAD_REQUEST);
                 }
                 break;
             }
             case "/cancelQuery": {
                 if ( request.getAttribute(ASYNC_REQ_ATTR) == null ) {
-                    String cluster = request.getParameter("cluster");
                     final String cuqId = request.getParameter("cuqId");
-                    if (cluster == null || cluster.length() == 0 || cuqId == null || cuqId.length() == 0) {
-                        response.setContentType("application/json; charset=utf-8");
-                        response.setStatus(HttpServletResponse.SC_NOT_FOUND);
-                        writer.printf("{\"result\":\"%s\", \"msg\":\"%s\"}", "error", "Invalid parameter.");
-                        LOG.error("cancelQuery invalid. " + cluster + " " + cuqId);
-                        break;
-                    }
-                    final QCCluster c = qcMgr.getCluster(cluster);
-                    if (c == null) {
-                        response.setContentType("application/json; charset=utf-8");
-                        response.setStatus(HttpServletResponse.SC_NOT_FOUND);
-                        writer.printf("{\"result\":\"%s\", \"msg\":\"%s\"}", "error", "Invalid parameter.");
-                        LOG.error("cancelQuery invalid. cluster " + cluster + " not found");
+                    final QCCluster c = qcMgr.getCluster(request.getParameter("cluster"));
+                    if (c == null || cuqId == null || cuqId.length() == 0) {
+                        LOG.error(urlWithParameter + " : invalid parameter");
+                        writer.print("{\"result\":\"error\", \"msg\":\"invalid parameter\"}");
+                        response.setStatus(HttpServletResponse.SC_BAD_REQUEST);
                         break;
                     }
                     final QCQuery.QueryExport eq = c.getExportedRunningQueryByCuqId(cuqId);
                     if ( eq == null ) {
                         response.setContentType("application/json; charset=utf-8");
-                        response.setStatus(HttpServletResponse.SC_NOT_FOUND);
+                        response.setStatus(HttpServletResponse.SC_OK);
                         writer.printf("{\"result\":\"%s\", \"msg\":\"%s\"}", "error", "query finished already.");
                         LOG.error("cancelQuery invalid. cuqId " + cuqId + " not found");
                         break;
@@ -204,10 +182,9 @@ public class CMApiServletQC extends HttpServlet {
                 } else {
                     String reply = (String) request.getAttribute(ASYNC_RETURN_ATTR);
                     if (reply == null || reply.length() == 0) {
-                        LOG.error("AsyncTask didn't set valid return message.");
+                        LOG.error("Cancel AsyncTask didn't set valid return message.");
                         reply="{\"result\":\"error\", \"msg\":\"Result was not set.\"}";
                     }
-                    response.setContentType("application/json; charset=utf-8");
                     response.setStatus(HttpServletResponse.SC_OK);
                     writer.print(reply);
                 }

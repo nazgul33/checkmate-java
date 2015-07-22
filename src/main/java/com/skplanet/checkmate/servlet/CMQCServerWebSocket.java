@@ -12,9 +12,9 @@ import org.slf4j.LoggerFactory;
 /**
  * Created by nazgul33 on 15. 2. 13.
  */
-public class CMWebSocketQC implements WebSocketListener {
+public class CMQCServerWebSocket implements WebSocketListener {
     private static final boolean DEBUG = false;
-    private static final Logger LOG = LoggerFactory.getLogger("websocket");
+    private static final Logger LOG = LoggerFactory.getLogger("websocket-server-qc");
 
     private Session outbound;
     private int id = -1;

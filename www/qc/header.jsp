@@ -18,12 +18,12 @@
 
 <div class="container-fluid" align="center" style="padding: 10px; background-color: #285e8e;">
 <div id="header" style="width: 90%;">
-	<div id="header-clusters" class="header-left" align="left">
-		<a class="btn btn-primary btn-xs" href="/qc/index.jsp?cluster=${param.cluster}">system</a>&nbsp;&nbsp;&nbsp;&nbsp;
-		<a class="btn btn-primary btn-xs" href="/qc/queries.jsp?cluster=${param.cluster}">queries</a>&nbsp;&nbsp;&nbsp;&nbsp;
-		<a class="btn btn-primary btn-xs" href="/qc/pools.jsp?cluster=${param.cluster}">pools</a>&nbsp;&nbsp;&nbsp;&nbsp;
+	<div id="header-pages" class="header-left" align="left">
+		<a id="headerMenuSystem" class="btn btn-primary btn-xs" href="/qc/index.jsp?cluster=${param.cluster}">system</a>&nbsp;&nbsp;&nbsp;&nbsp;
+		<a id="headerMenuQueries" class="btn btn-primary btn-xs" href="/qc/queries.jsp?cluster=${param.cluster}">queries</a>&nbsp;&nbsp;&nbsp;&nbsp;
+		<a id="headerMenuPools" class="btn btn-primary btn-xs" href="/qc/pools.jsp?cluster=${param.cluster}">pools</a>&nbsp;&nbsp;&nbsp;&nbsp;
 	</div>
-	<div id="header-pages" class="header-right" align="right">
+	<div id="header-clusters" class="header-right" align="right">
 		<span style="color:white; font-weight: bold;">Clusters :</span>
 		<select class="selectpicker" data-style="btn-info btn-xs" onchange="onClusterChange(this)">
 			<c:forEach var="clusterName" items="${clusters.qcClusters}">
