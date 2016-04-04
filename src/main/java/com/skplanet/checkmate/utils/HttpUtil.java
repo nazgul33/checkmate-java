@@ -24,6 +24,14 @@ public class HttpUtil {
     // returns response code
     // if response code is 200, parameter "response" should have the result
     public int get(String url, StringBuffer response) throws Exception {
+        return get(url, response, null);
+    }
+
+    public int getJson(String url, StringBuffer response) throws Exception {
+        return get(url, response, "application/json");
+    }
+
+    public int get(String url, StringBuffer response, String accept) throws Exception {
         URL obj = new URL(url);
         HttpURLConnection con = (HttpURLConnection) obj.openConnection();
         con.setConnectTimeout(CONNECTION_TIMEOUT);
@@ -35,6 +43,10 @@ public class HttpUtil {
         //add request header
         con.setRequestProperty("User-Agent", userAgent);
 
+        if (accept != null) {
+            con.setRequestProperty("Accept", accept);
+        }
+
         int responseCode = con.getResponseCode();
         if (DEBUG) {
             System.out.println("\nSending 'GET' request to URL : " + url);
@@ -43,7 +55,7 @@ public class HttpUtil {
 
         if (responseCode == 200) {
             BufferedReader in = new BufferedReader(
-                    new InputStreamReader(con.getInputStream()));
+                new InputStreamReader(con.getInputStream()));
             String inputLine;
 
             while ((inputLine = in.readLine()) != null) {

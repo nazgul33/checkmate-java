@@ -1,8 +1,11 @@
 package com.skplanet.checkmate;
 
+import com.codahale.metrics.MetricRegistry;
+import com.codahale.metrics.servlets.MetricsServlet;
 import com.skplanet.checkmate.querycache.QCClusterManager;
 import com.skplanet.checkmate.servlet.CMApiServletQC;
 import com.skplanet.checkmate.servlet.CMWebSocketServletQC;
+import com.skplanet.checkmate.yarn.YarnMonitor;
 import org.apache.commons.configuration.HierarchicalINIConfiguration;
 import org.apache.commons.configuration.SubnodeConfiguration;
 import org.apache.tomcat.InstanceManager;
@@ -36,10 +39,18 @@ import java.util.List;
 public class CheckMateServer
 {
     private static final Logger LOG = LoggerFactory.getLogger("main");
+    private static final MetricRegistry metrics = new MetricRegistry();
+
+    public static MetricRegistry getMetrics() {
+        return metrics;
+    }
 
     private void StartClusterManagers() {
         LOG.info("Starting QueryCache Cluster Thread");
         QCClusterManager.getInstance().startThread();
+
+//        LOG.info("Starting Yarn Monitor");
+//        YarnMonitor.getInstance();
     }
     private void ShutdownClusterManagers() {
         LOG.info("Shutting down QueryCache Cluster Thread");
@@ -153,7 +164,7 @@ public class CheckMateServer
         context.setContextPath("/");
         context.setAttribute("javax.servlet.context.tempdir", scratchDir);
         context.setAttribute("org.eclipse.jetty.server.webapp.ContainerIncludeJarPattern",
-                ".*/[^/]*servlet-api-[^/]*\\.jar$|.*/javax.servlet.jsp.jstl-.*\\.jar$|.*/.*taglibs.*\\.jar$");
+            ".*/[^/]*servlet-api-[^/]*\\.jar$|.*/javax.servlet.jsp.jstl-.*\\.jar$|.*/.*taglibs.*\\.jar$");
         context.setResourceBase(baseUri.toASCIIString());
         context.setAttribute("org.eclipse.jetty.containerInitializers", jspInitializers());
         context.setAttribute(InstanceManager.class.getName(), new SimpleInstanceManager());
@@ -185,11 +196,15 @@ public class CheckMateServer
         apiQc.addServlet(new ServletHolder(new CMWebSocketServletQC()), "/websocket/*");
         apiQc.addServlet(new ServletHolder(new CMApiServletQC()), "/*");
 
+        ServletContextHandler metrics = new ServletContextHandler(ServletContextHandler.SESSIONS);
+        metrics.setContextPath("/api/metrics");
+        metrics.addServlet(new ServletHolder(new MetricsServlet(getMetrics())), "/metrics");
+
         File scratchDir = getScratchDir();
         ServletContextHandler webappHandler = getWebAppContext(baseUri, scratchDir);
 
         ContextHandlerCollection contextCollection = new ContextHandlerCollection();
-        contextCollection.setHandlers( new Handler[] { apiQc, webappHandler } );
+        contextCollection.setHandlers( new Handler[] { apiQc, metrics, webappHandler } );
 
         HandlerList handlers = new HandlerList();
         handlers.setHandlers(new Handler[]{contextCollection});

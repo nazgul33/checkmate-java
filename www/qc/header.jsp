@@ -19,7 +19,8 @@
 <div class="container-fluid" align="center" style="padding: 10px; background-color: #285e8e;">
 <div id="header" style="width: 90%;">
 	<div id="header-pages" class="header-left" align="left">
-		<a id="headerMenuSystem" class="btn btn-primary btn-xs" href="/qc/index.jsp?cluster=${param.cluster}">system</a>&nbsp;&nbsp;&nbsp;&nbsp;
+		<a id="headerMenuDashboard" class="btn btn-primary btn-xs" href="/qc/index.jsp?cluster=${param.cluster}">dashboard</a>&nbsp;&nbsp;&nbsp;&nbsp;
+		<a id="headerMenuSystem" class="btn btn-primary btn-xs" href="/qc/system.jsp?cluster=${param.cluster}">system</a>&nbsp;&nbsp;&nbsp;&nbsp;
 		<a id="headerMenuQueries" class="btn btn-primary btn-xs" href="/qc/queries.jsp?cluster=${param.cluster}">queries</a>&nbsp;&nbsp;&nbsp;&nbsp;
 		<a id="headerMenuPools" class="btn btn-primary btn-xs" href="/qc/pools.jsp?cluster=${param.cluster}">pools</a>&nbsp;&nbsp;&nbsp;&nbsp;
 	</div>

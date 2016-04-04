@@ -1,13 +1,19 @@
 package com.skplanet.checkmate.querycache;
 
+import com.codahale.metrics.Histogram;
+import com.codahale.metrics.Meter;
+import com.codahale.metrics.SlidingTimeWindowReservoir;
 import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
+import com.skplanet.checkmate.CheckMateServer;
 import com.skplanet.checkmate.utils.HttpUtil;
 
 import java.net.ConnectException;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.util.*;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import org.eclipse.jetty.websocket.client.ClientUpgradeRequest;
 import org.eclipse.jetty.websocket.client.WebSocketClient;
@@ -21,6 +27,7 @@ public class QCServer {
     private static final boolean DEBUG = false;
     private static final Logger LOG = LoggerFactory.getLogger("querycache");
     private static final int MAX_COMPLETE_QUERIES = 100;
+    private final Histogram histogram;
 
     // inner-classes below are for gson conversion from json object.
     // NOTICE!
@@ -78,7 +85,6 @@ public class QCServer {
     public final String name;
     private Map<String, QCQuery> queriesRunning;
     private Map<String, QCQuery> queriesComplete;
-    private boolean online;
     public final QCCluster cluster;
 
     private List<ConDesc> connections = null;
@@ -87,14 +93,34 @@ public class QCServer {
 
     private long lastQueryUpdate = 0;
 
+    private boolean online;
+    private String lastException;
+
+    private AtomicInteger queryCount = new AtomicInteger(0);
+
     QCServer(String name, QCCluster cluster) {
         this.name = name;
         queriesRunning = new HashMap<>();
-        queriesComplete = new HashMap<>();
+        queriesComplete = new LinkedHashMap<String, QCQuery>() {
+            protected boolean removeEldestEntry(Map.Entry eldest) {
+                return size() > MAX_COMPLETE_QUERIES;
+            }
+        };
         online = false;
         this.cluster = cluster;
 
         connectRealtimeWebSocket();
+
+        StringBuffer sb = new StringBuffer();
+        sb.append("queries.").append(cluster.name).append('.').append(this.name);
+        histogram = new Histogram( new SlidingTimeWindowReservoir(5L, TimeUnit.MINUTES) );
+        CheckMateServer.getMetrics().register(sb.toString(), histogram);
+    }
+
+    public int updateQueryCount() {
+        int count = queryCount.getAndSet(0);
+        histogram.update(count);
+        return count;
     }
 
     public boolean isOnline() {
@@ -103,6 +129,14 @@ public class QCServer {
 
     public void setOnline(boolean online) {
         this.online = online;
+    }
+
+    public String getLastException() {
+        return lastException;
+    }
+
+    public void setLastException(Exception e) {
+        this.lastException = e.getMessage();
     }
 
     public Collection<QCQuery> getRunningQueries() {
@@ -121,11 +155,9 @@ public class QCServer {
         return ql;
     }
 
-    public void Update(boolean partial) {
-        if (partial) {
-            UpdateQueries();
-            lastQueryUpdate = new Date().getTime();
-        }
+    public void Update() {
+        // update routines below will set offline when update is failed.
+        this.setOnline(true);
 
         UpdateQueries();
         lastQueryUpdate = new Date().getTime();
@@ -149,6 +181,7 @@ public class QCServer {
                 }
             } else {
                 this.queriesRunning.put(q.cuqId, q);
+                queryCount.incrementAndGet();
             }
         }
         this.cluster.addExportedRunningQuery(q);
@@ -207,6 +240,7 @@ public class QCServer {
                             this.queriesRunning.put(q.cuqId, q);
                             added++;
                             this.cluster.addExportedRunningQuery(q);
+                            queryCount.incrementAndGet();
                         }
                     }
 
@@ -214,45 +248,46 @@ public class QCServer {
                         LOG.debug(this.name + ": running queries +" + added + " #" + updated + " -" + removed);
                     }
                 }
+
                 synchronized (queriesComplete) {
                     int added = 0;
-                    int removed = 0;
+
                     // process "current" complete query list
+                    // sort key endTime, ascending
+                    Collections.sort(queries.completeQueries, new Comparator<QCQuery.QueryImport>() {
+                        @Override
+                        public int compare(QCQuery.QueryImport o1, QCQuery.QueryImport o2) {
+                            return (o2.endTime > o1.endTime) ? 1 : (o2.endTime == o1.endTime) ? 0 : -1;
+                        }
+                    });
+
                     for (QCQuery.QueryImport qi : queries.completeQueries) {
-                        QCQuery q = new QCQuery(this, qi);
+                        String cuqId = QCQuery.getCuqId(this, qi);
                         // complete query has no changes. process new complete queries only.
-                        if (!this.queriesComplete.containsKey(q.cuqId)) {
-                            this.queriesComplete.put(q.cuqId, q);
+                        if (!this.queriesComplete.containsKey(cuqId)) {
+                            QCQuery q = new QCQuery(this, qi);
+                            this.queriesComplete.put(cuqId, q);
+                            cluster.queueCompleteQuery(q);
                             added++;
                         }
                     }
 
-                    // remove oldest query. sort key is endTime
-                    if (this.queriesComplete.size() > MAX_COMPLETE_QUERIES) ;
-                    {
-                        ArrayList<QCQuery> cqList = new ArrayList<>(queriesComplete.size());
-                        cqList.addAll(queriesComplete.values());
-                        Collections.sort(cqList, new Comparator<QCQuery>() {
-                            @Override
-                            public int compare(QCQuery o1, QCQuery o2) {
-                                return ((o2.endTime - o1.endTime) < 0) ? -1 : (o2.endTime == o1.endTime) ? 0 : 1;
-                            }
-                        });
-                        for (int i = cqList.size()-1; i >= MAX_COMPLETE_QUERIES; i--) {
-                            queriesComplete.remove(cqList.get(i).id);
-                            removed++;
-                        }
-                    }
                     if (DEBUG) {
-                        LOG.debug(this.name + ": complete queries +" + added + " -" + removed);
+                        LOG.debug("{} : cq size = {}(+{})",
+                            this.name, this.queriesComplete.size(), added);
                     }
                 }
             }
         } catch (Exception e) {
-            if (e instanceof ConnectException)
+            if (e instanceof ConnectException) {
                 LOG.error(this.name + ": updating queries: connection refused.");
-            else
+                this.setOnline(false);
+                this.setLastException(e);
+            }
+            else {
                 LOG.error(this.name + ": updating queries: ", e);
+                this.setLastException(e);
+            }
         }
     }
 
@@ -272,7 +307,15 @@ public class QCServer {
                 }
             }
         } catch (Exception e) {
-            e.printStackTrace();
+            if (e instanceof ConnectException) {
+                LOG.error(this.name + ": updating connections: connection refused.");
+                this.setOnline(false);
+                this.setLastException(e);
+            }
+            else {
+                LOG.error(this.name + ": updating connections,", e);
+                this.setLastException(e);
+            }
         }
     }
 
@@ -293,7 +336,15 @@ public class QCServer {
                 }
             }
         } catch (Exception e) {
-            e.printStackTrace();
+            if (e instanceof ConnectException) {
+                LOG.error(this.name + ": updating pools: connection refused.");
+                this.setOnline(false);
+                this.setLastException(e);
+            }
+            else {
+                LOG.error(this.name + ": updating pools,", e);
+                this.setLastException(e);
+            }
         }
     }
 
@@ -312,7 +363,15 @@ public class QCServer {
                 }
             }
         } catch (Exception e) {
-            e.printStackTrace();
+            if (e instanceof ConnectException) {
+                LOG.error(this.name + ": updating system stats: connection refused.");
+                this.setOnline(false);
+                this.setLastException(e);
+            }
+            else {
+                LOG.error(this.name + ": updating system stats,", e);
+                this.setLastException(e);
+            }
         }
     }
 
@@ -361,6 +420,7 @@ public class QCServer {
         String uri = "ws://" + this.name + ":" + cluster.getOpt().webPort + "/api/websocket";
         WebSocketClient c = new WebSocketClient();
         QCClientWebSocket s = new QCClientWebSocket(this);
+        rtWebSocket = null;
         try {
             c.start();
             URI rtUri = new URI(uri);

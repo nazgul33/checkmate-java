@@ -89,3 +89,73 @@
 	color-stop(.5, rgba(255, 255, 255, .2)),
 	color-stop(.5, transparent), to(transparent));
 }
+
+.table > td.qServer,
+.table > th.qServer
+{
+	width: 80px;
+	padding-right: 1px;
+}
+
+.table > td.qId,
+.table > th.qId
+{
+	width: 80px;
+	padding-right: 1px;
+}
+
+.table > td.qType,
+.table > th.qType
+{
+	width: 80px;
+	padding-right: 1px;
+}
+
+.table > td.qUser,
+.table > th.qUser
+{
+	width: 80px;
+	padding-right: 1px;
+}
+
+.table > td.qState,
+.table > th.qState
+{
+	width: 80px;
+	padding-right: 1px;
+}
+
+.table > td.qClient,
+.table > th.qClient
+{
+	width: 100px;
+	padding-right: 1px;
+}
+
+.table > td.qRows,
+.table > th.qRows
+{
+	width: 80px;
+	padding-right: 1px;
+}
+
+.table > td.qStartTime,
+.table > th.qStartTime
+{
+	width: 140px;
+	padding-right: 1px;
+}
+
+.table > td.qElapsedTime,
+.table > th.qElapsedTime
+{
+	width: 140px;
+	padding-right: 1px;
+}
+
+.table > td.qCancel,
+.table > th.qCancel
+{
+	width: 140px;
+	padding-right: 1px;
+}

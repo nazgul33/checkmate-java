@@ -55,7 +55,7 @@ public class QCQuery {
     public final String id;
     public final String backend;
     public final String user;
-    public final String type;
+    public String type;
     public final String statement;
     public final String client;
     public String state;
@@ -88,11 +88,16 @@ public class QCQuery {
 
         this.updateTime = new Date().getTime();
 
-        this.cuqId = getCuqId();
+        this.cuqId = getCuqId(server, qObj);
     }
 
     public boolean Update(QCQuery qObj) {
         boolean updated = false;
+        if ( !this.type.equals(qObj.type) ) {
+            if (DEBUG) System.console().printf("query %s update type %s -> %s\n", id, type, qObj.type);
+            this.type = qObj.type;
+            updated = true;
+        }
         if ( !this.state.equals(qObj.state) ) {
             if (DEBUG) System.console().printf("query %s update state %s -> %s\n", id, state, qObj.state);
             this.state = qObj.state;
@@ -103,18 +108,24 @@ public class QCQuery {
             this.rowCnt = qObj.rowCnt;
             updated = true;
         }
-        if ( !Arrays.equals(this.timeHistogram, qObj.timeHistogram) ) {
-            this.timeHistogram = qObj.timeHistogram;
+        if ( this.endTime != qObj.endTime ) {
+            if (DEBUG) System.console().printf("query %s update rowCnt %s -> %s\n", id, endTime, qObj.endTime);
+            this.endTime = qObj.endTime;
             updated = true;
         }
-        if ( !Arrays.equals(this.execProfile, qObj.execProfile) ) {
-            this.execProfile = qObj.execProfile;
-            updated = true;
-        }
-        if ( !Arrays.equals(this.fetchProfile, qObj.fetchProfile) ) {
-            this.fetchProfile = qObj.fetchProfile;
-            updated = true;
-        }
+
+//        if ( !Arrays.equals(this.timeHistogram, qObj.timeHistogram) ) {
+//            this.timeHistogram = qObj.timeHistogram;
+//            updated = true;
+//        }
+//        if ( !Arrays.equals(this.execProfile, qObj.execProfile) ) {
+//            this.execProfile = qObj.execProfile;
+//            updated = true;
+//        }
+//        if ( !Arrays.equals(this.fetchProfile, qObj.fetchProfile) ) {
+//            this.fetchProfile = qObj.fetchProfile;
+//            updated = true;
+//        }
 
         if (updated) {
             this.updateTime = new Date().getTime();
@@ -122,8 +133,8 @@ public class QCQuery {
         return updated;
     }
 
-    public String getCuqId() {
-        String cuqid = new String(Base64.encodeBase64((server.name+backend+id).trim().toUpperCase().getBytes()));
+    public static String getCuqId(QCServer server, QCQuery.QueryImport qi) {
+        String cuqid = new String(Base64.encodeBase64((server.name+qi.connType+qi.queryId).trim().toUpperCase().getBytes()));
         return cuqid.replace('+',':').replace('/','.').replace('=','-');
     }
 

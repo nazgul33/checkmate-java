@@ -19,10 +19,10 @@ public class QCClusterManager {
     private Map<String, QCCluster.Options> clusterConfigMap = new HashMap<>();
 
     private int fullUpdateInterval = 10 * 1000;
-    private int pingWebSocketsInterval = 30 * 1000;
+    private int pingWebSocketsInterval = 5 * 1000;
 
     private void readConfiguration() {
-        String home = System.getenv("QC_HOME");
+        String home = System.getenv("CM_HOME");
         if (home == null) {
             home = "./";
         }
@@ -32,6 +32,7 @@ public class QCClusterManager {
         QCCluster.Options options[];
 
         try {
+            LOG.info("reading checkmate::querycache configuration from " + conf);
             clusterConfigFile = new HierarchicalINIConfiguration(conf);
             SubnodeConfiguration globalSection = clusterConfigFile.getSection(null);
             globalSection.setThrowExceptionOnMissing(true);
@@ -66,7 +67,7 @@ public class QCClusterManager {
                     return;
                 }
 
-                QCClusterManager.qcMgr.UpdateClusters(false);
+                QCClusterManager.qcMgr.UpdateClusters();
                 lastFullUpdate = new Date();
                 QCClusterThread.this.fullUpdateTaskRunning.set(false);
             }
@@ -75,12 +76,22 @@ public class QCClusterManager {
         private class QCClusterWebSocketPingTask extends TimerTask {
             @Override
             public void run() {
+                LOG.info("pinging clusters");
                 QCClusterManager.qcMgr.pingWebSockets();
             }
         }
 
+        private class QCCounterUpdateTask extends TimerTask {
+            @Override
+            public void run() {
+                for (QCCluster cluster: clusters) {
+                    cluster.updateCounters();
+                }
+            }
+        }
         TimerTask qcTimerFull = new QCClusterFullUpdateTask();
         TimerTask qcTimerPingWebSockets = new QCClusterWebSocketPingTask();
+        TimerTask qcCounterUpdateTask = new QCCounterUpdateTask();
 
         AtomicBoolean fullUpdateTaskRunning = new AtomicBoolean(false);
         Date lastFullUpdate = new Date();
@@ -89,10 +100,11 @@ public class QCClusterManager {
         public void run() {
             Timer timerFull = new Timer(true);
             Timer timerPingWebSockets = new Timer(true);
+            Timer timerCounterUpdateTask = new Timer(true);
 
             timerFull.scheduleAtFixedRate(qcTimerFull, 0, fullUpdateInterval);
             timerPingWebSockets.scheduleAtFixedRate(qcTimerPingWebSockets, 0, pingWebSocketsInterval);
-
+            timerCounterUpdateTask.scheduleAtFixedRate(qcCounterUpdateTask, 60*1000, 60*1000);
             while (!QCClusterManager.this.quitThread) {
                 try {
                     Thread.sleep(100);
@@ -143,9 +155,9 @@ public class QCClusterManager {
             LOG.error("exception while waiting for thread " + e.toString());
         }
     }
-    public void UpdateClusters(boolean partial) {
+    public void UpdateClusters() {
         for (QCCluster cluster: clusters) {
-            cluster.Update(partial);
+            cluster.Update();
         }
     }
 

@@ -36,6 +36,7 @@ public class QCClientWebSocket implements WebSocketListener {
     @Override
     public void onWebSocketClose(int statusCode, String reason)
     {
+        LOG.info("WebSocket to " + server.name + " closed");
         this.outbound = null;
         server.removeRtWebSocket();
     }
@@ -58,6 +59,10 @@ public class QCClientWebSocket implements WebSocketListener {
     @Override
     public void onWebSocketError(Throwable cause) {
         LOG.error("websocket error", cause);
+        if (this.outbound == null) {
+            // connection error. server's websocket should be cleared.
+            server.removeRtWebSocket();
+        }
     }
 
     public static final String evtStrQueryAdded = "runningQueryAdded";
@@ -92,14 +97,14 @@ public class QCClientWebSocket implements WebSocketListener {
             case evtStrQueryAdded:
             case evtStrQueryUpdated:
                 if (evt.query != null) {
-                    LOG.info("new RT query");
+                    LOG.debug("new RT query");
                     q = new QCQuery(server, evt.query);
                     server.processAddQueryEvent(q);
                 }
                 break;
             case evtStrQueryRemoved:
                 if (evt.query != null) {
-                    LOG.info("removing RT query");
+                    LOG.debug("removing RT query");
                     q = new QCQuery(server, evt.query);
                     server.processRemoveQueryEvent(q);
                 }
