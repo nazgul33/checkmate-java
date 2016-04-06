@@ -18,10 +18,10 @@ import java.util.concurrent.atomic.AtomicInteger;
 public class QCCluster {
     private static final boolean DEBUG = false;
     private static final Logger LOG = LoggerFactory.getLogger("querycache");
-    private static int MAX_COMPLETE_QUERIES = 100;
-    private static String RQE_ADDED = "runningQueryAdded";
-    private static String RQE_UPDATED = "runningQueryUpdated";
-    private static String RQE_REMOVED = "runningQueryRemoved";
+    private static final int MAX_COMPLETE_QUERIES = 100;
+    private static final String RQE_ADDED = "runningQueryAdded";
+    private static final String RQE_UPDATED = "runningQueryUpdated";
+    private static final String RQE_REMOVED = "runningQueryRemoved";
 
     static public class Options {
         public int webPort = 8080;
@@ -130,7 +130,7 @@ public class QCCluster {
         public String cuqId = null;
     }
 
-    private Map<String, QCQuery.QueryExport> exportedRunningQueriesMap = new HashMap<>();
+    private final Map<String, QCQuery.QueryExport> exportedRunningQueriesMap = new HashMap<>();
     public QCQuery.QueryExport getExportedRunningQueryByCuqId(String cuqId) {
         QCQuery.QueryExport q;
         synchronized (exportedRunningQueriesMap) {
@@ -147,34 +147,22 @@ public class QCCluster {
         }
 
         RunningQueryEvent evt = new RunningQueryEvent();
-        if (queryUpdated) {
-            evt.msgType = RQE_UPDATED;
-            evt.query = eq;
-            evt.cuqId = null;
-        } else {
-            evt.msgType = RQE_ADDED;
-            evt.query = eq;
-            evt.cuqId = null;
-        }
+        evt.msgType = queryUpdated? RQE_UPDATED:RQE_ADDED;
+        evt.query = eq;
+        evt.cuqId = eq.cuqId;
         addRunningQueryEvent(evt);
     }
 
     public void removeExportedRunningQuery(QCQuery q) {
-        boolean notifyClients;
         synchronized (exportedRunningQueriesMap) {
-            if (!exportedRunningQueriesMap.containsKey(q.cuqId)) {
-                LOG.error("trying to remove non-existent cuqId");
-            }
-            notifyClients = (exportedRunningQueriesMap.remove(q.cuqId) != null);
+            exportedRunningQueriesMap.remove(q.cuqId);
         }
-
-        if (notifyClients) {
-            RunningQueryEvent evt = new RunningQueryEvent();
-            evt.msgType = RQE_REMOVED;
-            evt.query = null;
-            evt.cuqId = q.cuqId;
-            addRunningQueryEvent(evt);
-        }
+        QCQuery.QueryExport eq = q.export();
+        RunningQueryEvent evt = new RunningQueryEvent();
+        evt.msgType = RQE_REMOVED;
+        evt.query = eq;
+        evt.cuqId = eq.cuqId;
+        addRunningQueryEvent(evt);
     }
 
     public Collection<QCQuery.QueryExport> getExportedRunningQueries() {
@@ -192,14 +180,14 @@ public class QCCluster {
     }
 
     // complete query update accelerators
-    private List<QCQuery> tmpCompleteQueries = new ArrayList<>();
+    private final List<QCQuery> tmpCompleteQueries = new ArrayList<>();
     void queueCompleteQuery(QCQuery q) {
         synchronized (tmpCompleteQueries) {
             tmpCompleteQueries.add(q);
         }
     }
 
-    private LinkedList<QCQuery.QueryExport> exportedCompleteQueries = new LinkedList<>();
+    private final LinkedList<QCQuery.QueryExport> exportedCompleteQueries = new LinkedList<>();
     private void refreshExportedCompleteQueries() {
         synchronized (tmpCompleteQueries) {
             Collections.sort(tmpCompleteQueries, new Comparator<QCQuery>() {
@@ -242,7 +230,7 @@ public class QCCluster {
         public QCServer.SystemInfo system;
         public QCServer.ThreadInfo threads;
     }
-    private Map<String, SystemInfo> sysInfoMap = new HashMap<>();
+    private final Map<String, SystemInfo> sysInfoMap = new HashMap<>();
     public Collection<SystemInfo> getSystemInfo() {
         List<SystemInfo> l = new ArrayList<>();
         synchronized (sysInfoMap) {
@@ -264,7 +252,7 @@ public class QCCluster {
         public Collection<QCServer.ConDesc> connPoolList;
     }
 
-    private Map<String, PoolInfo> poolInfoMap = new HashMap<>();
+    private final Map<String, PoolInfo> poolInfoMap = new HashMap<>();
     public Collection<PoolInfo> getPoolInfo() {
         List<PoolInfo> l = new ArrayList<>();
         synchronized (poolInfoMap) {
@@ -292,49 +280,33 @@ public class QCCluster {
         realtimeMessageReceivers.remove(id);
     }
 
-    private LinkedList<RunningQueryEvent> evtQueue = new LinkedList<>();
+    private final static long retentionTime = 200;
+    private final LinkedList<RunningQueryEvent> evtQueue = new LinkedList<>();
     private void addRunningQueryEvent(RunningQueryEvent evt) {
-        long deadline = System.currentTimeMillis() - 100; // kill add event after deadline
         synchronized (evtQueue) {
             if (RQE_REMOVED.equals(evt.msgType)) {
                 Iterator<RunningQueryEvent> it = evtQueue.iterator();
-                boolean removeAllEvt = false;
                 while (it.hasNext()) {
                     RunningQueryEvent rqe = it.next();
                     String cuqId = (rqe.cuqId != null)? rqe.cuqId:rqe.query.cuqId;
-                    if (removeAllEvt) {
-                        if (evt.cuqId.equals(cuqId)) {
-                            it.remove();
-                        }
-                    } else {
-                        if (rqe.timestamp >= deadline) {
-                            if (evt.cuqId.equals(cuqId) && RQE_ADDED.equals(rqe.msgType)) {
-                                it.remove();
-                                removeAllEvt = true;
-                            }
-                        }
+                    if (evt.cuqId.equals(cuqId)) {
+                        it.remove();
                     }
                 }
-                // if matching add event is not found, add remove evt in queue
-                if (!removeAllEvt) {
-                    evtQueue.addLast(evt);
-                }
             }
-            else {
-                // other events are just added in queue
-                evtQueue.addLast(evt);
-            }
+
+            evtQueue.addLast(evt);
         }
     }
     public void notifySubscribers() {
-        long deadline = System.currentTimeMillis() - 100; // send events older than 100ms
+        long retainAfter = System.currentTimeMillis() - retentionTime; // send events older than 200ms
 
         LinkedList<RunningQueryEvent> el = new LinkedList<>();
         synchronized (evtQueue) {
             Iterator<RunningQueryEvent> it = evtQueue.iterator();
             while (it.hasNext()) {
                 RunningQueryEvent evt = it.next();
-                if (evt.timestamp < deadline) {
+                if (evt.timestamp < retainAfter) {
                     el.addLast(evt);
                     it.remove();
                 }
@@ -343,9 +315,7 @@ public class QCCluster {
 
         if (el.size()>0) {
             Gson gson = new Gson();
-            Iterator<RunningQueryEvent> it = el.iterator();
-            while (it.hasNext()) {
-                RunningQueryEvent evt = it.next();
+            for (RunningQueryEvent evt: el) {
                 String msg = gson.toJson(evt);
                 for (CMQCServerWebSocket ws : realtimeMessageReceivers.values()) {
                     ws.sendMessage(msg);

@@ -76,7 +76,6 @@ public class QCClusterManager {
         private class QCClusterWebSocketPingTask extends TimerTask {
             @Override
             public void run() {
-                LOG.info("pinging clusters");
                 QCClusterManager.qcMgr.pingWebSockets();
             }
         }
