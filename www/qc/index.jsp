@@ -86,7 +86,7 @@
 
 </script>
 
-<div class="container-fluid" align="left" width="100%">
+<div id="outermost_div" class="container-fluid" align="left" width="100%">
     <H2>Server Instances</H2>
     <table class="table table-striped small table-nonfluid" id="systemstats">
         <thead><tr>
@@ -102,11 +102,11 @@
         </tbody>
     </table>
     <H2>In-Flight Queries</H2>
-    <table class="table table-striped small" id="queriesinflight" width="100%">
+    <table class="table table-striped small fixed" id="queriesinflight">
         <thead><tr>
             <th class="qServer">server</th>
             <th class="qId">id</th>
-            <th class="qType">type</th>
+            <th class="qBackend">type</th>
             <th class="qUser">user</th>
             <th class="qStatement">statement</th>
             <th class="qState">state</th>

@@ -41,27 +41,42 @@
 </script>
 
 <div class="container-fluid" align="left" width="100%">
-	<div class="cmscrollbar" style="width: 100%; height: 50%; text-align:left; position: relative;">
-		<H2>In-Flight Queries</H2>
-		<table class="table table-striped small" id="queriesinflight">
-			<thead><tr>
-				<th>server</th><th>id</th><th>type</th><th>user</th><th>statement</th><th>state</th><th>client ip</th><th>rows</th><th>startTime</th><th>elapsedTime</th><th>Cancel</th>
-			</tr></thead>
-			<tbody>
-			</tbody>
-		</table>
-	</div>
+	<H2>In-Flight Queries</H2>
+	<table class="table table-striped small fixed" id="queriesinflight">
+		<thead><tr>
+		    <th class="qServer">server</th>
+		    <th class="qId">id</th>
+		    <th class="qBackend">type</th>
+		    <th class="qUser">user</th>
+		    <th class="qStatement">statement</th>
+		    <th class="qState">state</th>
+		    <th class="qClient">client ip</th>
+		    <th class="qRows">rows</th>
+		    <th class="qStartTime">startTime</th>
+		    <th class="qElapsedTime">elapsedTime</th>
+		    <th class="qCancel">Cancel</th>
+		</tr></thead>
+		<tbody>
+		</tbody>
+	</table>
 
-	<div style="width: 100%; text-align:left; position: relative;">
-		<H2>Complete Queries  <a class="btn btn-primary btn-xs" href="#" onclick="refreshCQ();" id="refreshcq">Manual Refresh</a> <img id="imgcqrefreshinprogress" src="/images/inprogress.gif" /></H2>
-		<table class="table table-striped small" id="queriescomplete">
-			<thead><tr>
-				<th>server</th><th>id</th><th>type</th><th>user</th><th>statement</th><th>state</th><th>client ip</th><th>rows</th><th>startTime</th><th>elapsedTime</th>
-			</tr></thead>
-			<tbody>
-			</tbody>
-		</table>
-	</div>
+	<H2>Complete Queries  <a class="btn btn-primary btn-xs" href="#" onclick="refreshCQ();" id="refreshcq">Manual Refresh</a> <img id="imgcqrefreshinprogress" src="/images/inprogress.gif" /></H2>
+	<table class="table table-striped small fixed" id="queriescomplete">
+		<thead><tr>
+		    <th class="qServer">server</th>
+		    <th class="qId">id</th>
+		    <th class="qBackend">type</th>
+		    <th class="qUser">user</th>
+		    <th class="qStatement">statement</th>
+		    <th class="qState">state</th>
+		    <th class="qClient">client ip</th>
+		    <th class="qRows">rows</th>
+		    <th class="qStartTime">startTime</th>
+		    <th class="qElapsedTime">elapsedTime</th>
+		</tr></thead>
+		<tbody>
+		</tbody>
+	</table>
 </div>
 </body>
 </html>

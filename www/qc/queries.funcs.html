@@ -119,12 +119,17 @@
       }
     }
     g_cq.unshift(q);
-    var contents =
-        '<tr id="' + q.cuqId + '"><td>'+q.server+'</td><td>'+q.id+'</td><td>'
-        +q.backend+'</td><td>'+q.user+'</td><td>'+q.statement+'</td><td>'
-        +q.state+'</td><td>'+q.client+'</td><td>'+q.rowCnt+'</td><td>'
-        +formatDate(new Date(q.startTime))+'</td><td>'
-        +((q.endTime - q.startTime)/1000).toFixed(1)+'</td></tr>';
+    var contents = '<tr id="' + q.cuqId + '"><td class="qServer">'+q.server
+          +'</td><td class="qId">'+q.id
+          +'</td><td class="qBackend">'+q.backend
+          +'</td><td class="qUser">'+q.user
+          +'</td><td class="qStatement">'+q.statement
+          +'</td><td class="qState">'+q.state
+          +'</td><td class="qClient">'+q.client
+          +'</td><td class="qRows">'+q.rowCnt
+          +'</td><td class="qStartTime">'+formatDate(new Date(q.startTime))
+          +'</td><td class="qElapsedTime">'+((q.endTime - q.startTime)/1000).toFixed(1)
+          +'</td></tr>';
     $(g_cq_table).prepend(contents);
   }
 
@@ -135,11 +140,17 @@
       g_cq = r.data;
       for (var i=0; i<g_cq.length; i++) {
         var q = g_cq[i];
-        contents += '<tr id="' + q.cuqId + '"><td>'+q.server+'</td><td>'+q.id+'</td><td>'
-            +q.backend+'</td><td>'+q.user+'</td><td>'+q.statement+'</td><td>'
-            +q.state+'</td><td>'+q.client+'</td><td>'+q.rowCnt+'</td><td>'
-            +formatDate(new Date(q.startTime))+'</td><td>'
-            +((q.endTime - q.startTime)/1000).toFixed(1)+'</td></tr>';
+        contents += '<tr id="' + q.cuqId + '"><td class="qServer">'+q.server
+              +'</td><td class="qId">'+q.id
+              +'</td><td class="qBackend">'+q.backend
+              +'</td><td class="qUser">'+q.user
+              +'</td><td class="qStatement">'+q.statement
+              +'</td><td class="qState">'+q.state
+              +'</td><td class="qClient">'+q.client
+              +'</td><td class="qRows">'+q.rowCnt
+              +'</td><td class="qStartTime">'+formatDate(new Date(q.startTime))
+              +'</td><td class="qElapsedTime">'+((q.endTime - q.startTime)/1000).toFixed(1)
+              +'</td></tr>';
       }
       $('#queriescomplete tbody').html(contents);
       $('#imgcqrefreshinprogress').hide();

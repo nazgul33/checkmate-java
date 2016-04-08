@@ -90,81 +90,94 @@
 	color-stop(.5, transparent), to(transparent));
 }
 
+table.fixed
+{
+	table-layout: fixed;
+}
 td.qServer,
 th.qServer
 {
-	width: 80px;
+	width: 50px;
+	padding-left: 1px;
 	padding-right: 1px;
 }
 
 td.qId,
 th.qId
 {
-	width: 80px;
+	width: 52px;
+	padding-left: 1px;
 	padding-right: 1px;
 }
 
 td.qBackend,
 th.qBackend
 {
-	width: 80px;
+	width: 72px;
+	padding-left: 1px;
 	padding-right: 1px;
 }
 
 td.qUser,
 th.qUser
 {
-	width: 80px;
+	width: 72px;
+	padding-left: 1px;
 	padding-right: 1px;
 }
 
 td.qStatement,
 th.qStatement
 {
-	width: 100%;
+	padding-left: 1px;
 	padding-right: 1px;
 	word-wrap: break-word;
-	max-width: 1200px;
 }
 
 td.qState,
 th.qState
 {
-	width: 80px;
+	width: 48px;
+	padding-left: 1px;
 	padding-right: 1px;
 }
 
 td.qClient,
 th.qClient
 {
-	width: 100px;
+	width: 90px;
+	padding-left: 1px;
 	padding-right: 1px;
 }
 
 td.qRows,
 th.qRows
 {
-	width: 80px;
+	width: 72px;
+	padding-left: 1px;
 	padding-right: 1px;
 }
 
 td.qStartTime,
 th.qStartTime
 {
-	width: 140px;
+	width: 80px;
+	padding-left: 1px;
 	padding-right: 1px;
 }
 
 td.qElapsedTime,
 th.qElapsedTime
 {
-	width: 140px;
+	width: 90px;
+	padding-left: 1px;
 	padding-right: 1px;
 }
 
 td.qCancel,
 th.qCancel
 {
-	width: 140px;
+	width: 90px;
+	padding-left: 1px;
 	padding-right: 1px;
 }
