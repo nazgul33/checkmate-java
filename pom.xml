@@ -163,6 +163,11 @@
       <artifactId>slf4j-log4j12</artifactId>
       <version>1.7.10</version>
     </dependency>
+    <dependency>
+      <groupId>com.sun.mail</groupId>
+      <artifactId>javax.mail</artifactId>
+      <version>1.5.4</version>
+    </dependency>
     <!--<dependency>-->
       <!--<groupId>org.apache.hadoop</groupId>-->
       <!--<artifactId>hadoop-common</artifactId>-->

@@ -5,6 +5,7 @@ import com.codahale.metrics.servlets.MetricsServlet;
 import com.skplanet.checkmate.querycache.QCClusterManager;
 import com.skplanet.checkmate.servlet.CMApiServletQC;
 import com.skplanet.checkmate.servlet.CMWebSocketServletQC;
+import com.skplanet.checkmate.utils.MailSender;
 import com.skplanet.checkmate.yarn.YarnMonitor;
 import org.apache.commons.configuration.HierarchicalINIConfiguration;
 import org.apache.commons.configuration.SubnodeConfiguration;
@@ -30,6 +31,7 @@ import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.net.*;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 /**
@@ -62,29 +64,6 @@ public class CheckMateServer
     private String home = null;
     private String wwwroot = null;
     private static final String WEBROOT_INDEX = "/www/";
-
-    private void readConfiguration() {
-        home = System.getenv("CM_HOME");
-        if (home == null) {
-            home = "./";
-        }
-
-        String conf = home + "/conf/checkmate.ini";
-        HierarchicalINIConfiguration clusterConfigFile = null;
-        LOG.info("reading checkmate configuration from " + conf);
-
-        try {
-            clusterConfigFile = new HierarchicalINIConfiguration(conf);
-            SubnodeConfiguration globalSection = clusterConfigFile.getSection(null);
-            globalSection.setThrowExceptionOnMissing(true);
-            webServicePort = globalSection.getInt("WebServicePort", 8080);
-
-        }
-        catch (Exception e) {
-            LOG.error("error loading configuration.", e);
-            System.exit(1);
-        }
-    }
 
     private URI getWebRootResourceUri() throws FileNotFoundException, URISyntaxException, MalformedURLException
     {
@@ -215,14 +194,63 @@ public class CheckMateServer
         return webServer;
     }
 
-    public CheckMateServer() {
-        readConfiguration();
+    private final HierarchicalINIConfiguration clusterConfigFile;
+    private MailSender mailSender = null;
+    private List<String> mailRecipients = null;
+
+    public CheckMateServer() throws Exception {
+        home = System.getenv("CM_HOME");
+        if (home == null) {
+            home = "./";
+        }
+
+        String conf = home + "/conf/checkmate.ini";
+        LOG.info("reading checkmate configuration from " + conf);
+
+        clusterConfigFile = new HierarchicalINIConfiguration(conf);
+        SubnodeConfiguration globalSection = clusterConfigFile.getSection(null);
+        globalSection.setThrowExceptionOnMissing(true);
+        webServicePort = globalSection.getInt("WebServicePort", 8080);
+
+        // init mail sender
+        String smtpServer = globalSection.getString("SmtpServer", null);
+        String smtpFrom = globalSection.getString("SmtpFrom", "CheckMate<noreply@checkmate.com>");
+        int smtpPort = globalSection.getInt("SmtpPort", 25);
+        String recipients = globalSection.getString("MailRecipients", null);
+
+        if (smtpServer != null && recipients != null) {
+            mailRecipients = Arrays.asList( recipients.split(",") );
+            mailSender = new MailSender(smtpServer, smtpFrom, smtpPort, mailRecipients);
+            new Thread(mailSender).start();
+        }
+    }
+
+    public HierarchicalINIConfiguration getClusterConfigFile() {
+        return clusterConfigFile;
+    }
+
+    public List<String> getMailRecipients() {
+        return mailRecipients;
+    }
+
+    public MailSender getMailSender() {
+        return mailSender;
+    }
+
+    private static CheckMateServer server = null;
+    public static CheckMateServer getInstance() {
+        return server;
     }
 
     public static void main( String[] args )
     {
-        final CheckMateServer server = new CheckMateServer();
-        server.StartClusterManagers();
+        try {
+            server = new CheckMateServer();
+            server.StartClusterManagers();
+        } catch (Exception e) {
+            LOG.error("error initializing CheckMateServer", e);
+            System.exit(1);
+        }
 
         try {
             server.runWebInterface();

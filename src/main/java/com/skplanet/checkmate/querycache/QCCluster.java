@@ -5,10 +5,13 @@ import com.codahale.metrics.SlidingTimeWindowReservoir;
 import com.google.gson.Gson;
 import com.skplanet.checkmate.CheckMateServer;
 import com.skplanet.checkmate.servlet.CMQCServerWebSocket;
+import com.skplanet.checkmate.utils.MailSender;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.awt.*;
 import java.util.*;
+import java.util.List;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -34,7 +37,7 @@ public class QCCluster {
     private Map<String, QCServer> servers;
     private Options opt;
 
-    private Timer nofifyTimer = new Timer();
+    private Timer notifyTimer = new Timer();
     Histogram histogram;
 
     public QCCluster(String name, Options opt) {
@@ -56,7 +59,8 @@ public class QCCluster {
                 notifySubscribers();
             }
         };
-        nofifyTimer.scheduleAtFixedRate(wsNotifyTask, 0, 50);
+        notifyTimer.scheduleAtFixedRate(wsNotifyTask, 0, 50);
+        notifyTimer.scheduleAtFixedRate(queryAnomalyDetectorTask, 5000L, 5000L);
 
         histogram = new Histogram( new SlidingTimeWindowReservoir(5L, TimeUnit.MINUTES) );
         CheckMateServer.getMetrics().register("queries."+name, histogram);
@@ -123,6 +127,46 @@ public class QCCluster {
         return opt;
     }
 
+    MailSender mailSender = CheckMateServer.getInstance().getMailSender();
+    private class EventAnomalyDetector {
+        private static final long longRunningLimit = 900L * 1000L; // 900 sec
+        boolean longRunningQuery = false;
+        QCQuery.QueryExport query = null;
+
+        void detect() {
+            long now = System.currentTimeMillis();
+            if ( query == null )
+                return;
+
+            if (!longRunningQuery) {
+                if (query.startTime + longRunningLimit < now &&
+                    ("EXEC".equals(query.state) || "INIT".equals(query.state))) {
+                    longRunningQuery = true;
+
+                    LOG.info("Slow query {}:{}", query.backend, query.id);
+                    if (mailSender != null) mailSender.addMail(
+                        new QCQueryMail(query, "Slow Query by " + query.user, "Slow query detected by CheckMate.")
+                    );
+                }
+            }
+        }
+    }
+
+    private final HashMap<String, EventAnomalyDetector> detectorMap = new HashMap<>();
+
+    TimerTask queryAnomalyDetectorTask = new TimerTask() {
+        @Override
+        public void run() {
+            Map<String, EventAnomalyDetector> dMap;
+            synchronized (detectorMap) {
+                dMap = new HashMap<>(detectorMap);
+            }
+            for ( Map.Entry<String, EventAnomalyDetector> entry : dMap.entrySet() ) {
+                entry.getValue().detect();
+            }
+        }
+    };
+
     private static class RunningQueryEvent {
         public long timestamp = System.currentTimeMillis();
         public String msgType = null;
@@ -145,6 +189,16 @@ public class QCCluster {
         synchronized (exportedRunningQueriesMap) {
             queryUpdated = (exportedRunningQueriesMap.put(eq.cuqId, eq) != null);
         }
+        synchronized (detectorMap) {
+            EventAnomalyDetector det = detectorMap.get(eq.cuqId);
+            if (det != null)
+                det.query = eq;
+            else {
+                det = new EventAnomalyDetector();
+                det.query = eq;
+                detectorMap.put(eq.cuqId, det);
+            }
+        }
 
         RunningQueryEvent evt = new RunningQueryEvent();
         evt.msgType = queryUpdated? RQE_UPDATED:RQE_ADDED;
@@ -156,6 +210,9 @@ public class QCCluster {
     public void removeExportedRunningQuery(QCQuery q) {
         synchronized (exportedRunningQueriesMap) {
             exportedRunningQueriesMap.remove(q.cuqId);
+        }
+        synchronized (detectorMap) {
+            detectorMap.remove(q.cuqId);
         }
         QCQuery.QueryExport eq = q.export();
         RunningQueryEvent evt = new RunningQueryEvent();

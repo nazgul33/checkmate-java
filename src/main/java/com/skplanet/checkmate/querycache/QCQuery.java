@@ -9,7 +9,7 @@ import java.util.Date;
  * Created by nazgul33 on 15. 1. 27.
  */
 public class QCQuery {
-    private static final boolean DEBUG = true;
+    private static final boolean DEBUG = false;
     public static class QueryImport {
         public String queryId;
         public String connType;
