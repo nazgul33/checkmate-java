@@ -40,8 +40,8 @@
 
 </script>
 
-<div class="container-fluid" align="center">
-	<div class="cmscrollbar" style="width: 90%; height: 30%; text-align:left; position: relative;">
+<div class="container-fluid" align="left" width="100%">
+	<div class="cmscrollbar" style="width: 100%; height: 50%; text-align:left; position: relative;">
 		<H2>In-Flight Queries</H2>
 		<table class="table table-striped small" id="queriesinflight">
 			<thead><tr>
@@ -52,7 +52,7 @@
 		</table>
 	</div>
 
-	<div style="width: 90%; text-align:left; position: relative;">
+	<div style="width: 100%; text-align:left; position: relative;">
 		<H2>Complete Queries  <a class="btn btn-primary btn-xs" href="#" onclick="refreshCQ();" id="refreshcq">Manual Refresh</a> <img id="imgcqrefreshinprogress" src="/images/inprogress.gif" /></H2>
 		<table class="table table-striped small" id="queriescomplete">
 			<thead><tr>

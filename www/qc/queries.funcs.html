@@ -1,4 +1,4 @@
-<script>
+<script type="text/javascript">
   var g_cluster_name = '${param.cluster}';
   var g_rq = {};
   var g_cq = [];
@@ -21,7 +21,7 @@
         resultTxt = 'Error';
         timeoutVal = 10000;
       }
-      $('#'+q.cuqId + ' .q-cancel a .ladda-label', g_rq_table).text(resultTxt);
+      $('#'+q.cuqId + ' .qCancel a .ladda-label', g_rq_table).text(resultTxt);
       setTimeout( function() {
         delete(g_rq[q.cuqId]);
         $('#'+q.cuqId).remove();
@@ -34,27 +34,26 @@
     var qTr = $('#' + q.cuqId);
     if (qTr.length) {
       // if the query exists, update
-      $('.q-state', qTr).html(q.state);
-      $('.q-rowcnt', qTr).html(q.rowCnt);
+      $('.qState', qTr).html(q.state);
+      $('.qRows', qTr).html(q.rowCnt);
     }
     else {
       var contents = '';
       // insert
-      contents += '<tr id="' + q.cuqId + '"><td class="q-server">'+q.server
-          +'</td><td class="q-id">'+q.id
-          +'</td><td class="q-backend">'+q.backend
-          +'</td><td class="q-user">'+q.user
-          +'</td><td class="q-statement">'+q.statement
-          +'</td><td class="q-state">'+q.state
-          +'</td><td class="q-client">'+q.client
-          +'</td><td class="q-rowcnt">'+q.rowCnt
-          +'</td><td class="q-starttime">'+formatDate(new Date(q.startTime))
-          +'</td><td class="q-elapsed">'+(((new Date()) - q.startTime)/1000).toFixed(1)
-          +'</td><td class="q-cancel"><a href="#" class="btn btn-primary btn-xs ladda-button" data-style="zoom-in" data-size="xs" data-spinner-size="28" data-spinner-color="#ffffff" data-cuqId="'+ q.cuqId+'"><span class="ladda-label">Cancel</span></a>'+'</td></tr>';
-//						+'</td><td class="q-cancel"><a href="#" onclick="cancelQuery(\''+q.cuqId+'\',\''+q.cancelUrl+'\');">Cancel</a>'+'</td></tr>';
+      contents += '<tr id="' + q.cuqId + '"><td class="qServer">'+q.server
+          +'</td><td class="qId">'+q.id
+          +'</td><td class="qBackend">'+q.backend
+          +'</td><td class="qUser">'+q.user
+	        +'</td><td class="qStatement">'+q.statement
+          +'</td><td class="qState">'+q.state
+          +'</td><td class="qClient">'+q.client
+          +'</td><td class="qRows">'+q.rowCnt
+          +'</td><td class="qStartTime">'+formatDate(new Date(q.startTime))
+          +'</td><td class="qElapsedTime">'+(((new Date()) - q.startTime)/1000).toFixed(1)
+          +'</td><td class="qCancel"><a href="#" class="btn btn-primary btn-xs ladda-button" data-style="zoom-in" data-size="xs" data-spinner-size="28" data-spinner-color="#ffffff" data-cuqId="'+ q.cuqId+'"><span class="ladda-label">Cancel</span></a>'+'</td></tr>';
       g_rq[q.cuqId] = q;
       $(g_rq_table).append(contents);
-      $('#'+q.cuqId + ' .q-cancel a', g_rq_table).click(function(e) {
+      $('#'+q.cuqId + ' .qCancel a', g_rq_table).click(function(e) {
         e.preventDefault();
         cuqId = this.getAttribute("data-cuqId");
         var q = g_rq[cuqId];
@@ -67,7 +66,7 @@
   }
 
   function updateElapsedTimeRQ() {
-    $('.q-elapsed', g_rq_table).each(function () {
+    $('.qElapsedTime', g_rq_table).each(function () {
       var t = Number($(this).text());
       $(this).text((t+0.1).toFixed(1));
     });
@@ -166,12 +165,15 @@
       try {
         switch (msg.msgType) {
           case 'runningQueryAdded':
+              console.log("add");
             addRunningQuery(msg.query);
             break;
           case 'runningQueryUpdated':
+            console.log("update");
             addRunningQuery(msg.query);
             break;
           case 'runningQueryRemoved':
+            console.log("remove");
             if (msg.cuqId in g_rq) {
               if (g_rq[msg.cuqId].cancelling != true)
                 removeRunningQuery(msg.query);

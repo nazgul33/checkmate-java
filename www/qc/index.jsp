@@ -108,7 +108,7 @@
             <th class="qId">id</th>
             <th class="qType">type</th>
             <th class="qUser">user</th>
-            <th>statement</th>
+            <th class="qStatement">statement</th>
             <th class="qState">state</th>
             <th class="qClient">client ip</th>
             <th class="qRows">rows</th>
