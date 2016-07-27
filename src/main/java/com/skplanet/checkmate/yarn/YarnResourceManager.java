@@ -30,7 +30,7 @@ public class YarnResourceManager {
     HttpUtil httpUtil = new HttpUtil();
     int responseCode = 0;
     try {
-      StringBuffer buf = new StringBuffer(2048);
+      StringBuilder buf = new StringBuilder(2048);
       responseCode = httpUtil.getJson(url, buf);
       LOG.info("http response {}", responseCode);
       if (responseCode == 200) {

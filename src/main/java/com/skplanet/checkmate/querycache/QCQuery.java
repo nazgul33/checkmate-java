@@ -1,169 +1,302 @@
 package com.skplanet.checkmate.querycache;
 
-import org.apache.commons.codec.binary.Base64;
-
-import java.util.Arrays;
+import java.text.SimpleDateFormat;
 import java.util.Date;
+
+import org.apache.commons.codec.binary.Base64;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.skplanet.checkmate.querycache.data.QCQueryImport;
 
 /**
  * Created by nazgul33 on 15. 1. 27.
  */
 public class QCQuery {
-    private static final boolean DEBUG = false;
-    public static class QueryImport {
-        public String queryId;
-        public String connType;
-        public String user;
-        public String queryType;
-        public String queryStr;
-        public String clientIp;
-        public String stmtState;
-        public long rowCnt;
-        public long startTime;
-        public long endTime;
-        // 0:exec/1:getmeta/2:fetch/3:stmtclose or
-        // 1:getschemas/2:fetch
-        public long[] timeHistogram = {0,0,0,0};
-        public long[] execProfile   = null;
-        public long[] fetchProfile  = {0,0,0,-1,-1,-1,-1,0,0,-1,-1};
-    }
 
-    public static class QueryExport {
-        public String cuqId; // cluster unique query id
-        public String server;
-        public String id;
-        public String backend;
-        public String user;
-        public String type;
-        public String statement;
-        public String client;
-        public String state;
-        public long rowCnt = -1;
-        public long startTime;
-        public long endTime = 0;
-        // 0:exec/1:getmeta/2:fetch/3:stmtclose or
-        // 1:getschemas/2:fetch
-        public long[] timeHistogram;
-        public long[] execProfile;
-        public long[] fetchProfile;
-        public String cancelUrl;
-    }
-
-    private QCServer server;
-
-    public final String cuqId;
-    public final String id;
-    public final String backend;
-    public final String user;
-    public String type;
-    public final String statement;
-    public final String client;
-    public String state;
-    public long rowCnt = -1;
-    public final long startTime;
-    public long endTime = 0;
+	private static final Logger LOG = LoggerFactory.getLogger(QCQuery.class);
+	
+    private String cluster;
+    private String server;
+    private String id;
+    private String backend;
+    private String user;
+    private String type;
+    private String statement;
+    private String client;
+    private String state;
+    private long rowCnt = -1;
+    private long startTime;
+    private long endTime = 0;
     // 0:exec/1:getmeta/2:fetch/3:stmtclose or
     // 1:getschemas/2:fetch
-    public long[] timeHistogram;
-    public long[] execProfile;
-    public long[] fetchProfile;
+    private long[] timeHistogram;
+    private long[] execProfile;
+    private long[] fetchProfile;
 
-    public long updateTime = 0;
+    private String cuqId;
+    private String cancelUrl;
+    
+    private long updateTime;
+    private long updateCount;
+    private boolean anormal = false;
 
-    public QCQuery(QCServer server, QueryImport qObj) {
-        this.server = server;
-        this.id = qObj.queryId;
-        this.backend = qObj.connType;
-        this.user = qObj.user;
-        this.type = qObj.queryType;
-        this.statement = qObj.queryStr;
-        this.client = qObj.clientIp;
-        this.state = qObj.stmtState;
-        this.rowCnt = qObj.rowCnt;
-        this.startTime = qObj.startTime;
-        this.endTime = qObj.endTime;
-        this.timeHistogram = qObj.timeHistogram;
-        this.execProfile = qObj.execProfile;
-        this.fetchProfile = qObj.fetchProfile;
+    public QCQuery(String cluster, String server, QCQueryImport qObj) {
+    	
+    	this.cluster       = cluster;
+        this.server        = server;
+        this.id            = qObj.getQueryId();
+        this.backend       = qObj.getConnType();
+        this.user          = qObj.getUser();
+        this.type          = qObj.getQueryType();
+        this.statement     = qObj.getQueryStr();
+        this.client        = qObj.getClientIp();
+        this.state         = qObj.getStmtState();
+        this.rowCnt        = qObj.getRowCnt();
+        this.startTime     = qObj.getStartTime();
+        this.endTime       = qObj.getEndTime();
+        this.timeHistogram = qObj.getTimeHistogram();
+        this.execProfile   = qObj.getExecProfile();
+        this.fetchProfile  = qObj.getFetchProfile();
 
-        this.updateTime = new Date().getTime();
+        this.cuqId = getCuqId(cluster, server, qObj);
+        this.cancelUrl = "/api/qc/cancelQuery?cluster="+cluster+"&cuqId="+cuqId;
 
-        this.cuqId = getCuqId(server, qObj);
-    }
+        this.updateCount = 0;
+        this.updateTime = System.currentTimeMillis();
+}
 
-    public boolean Update(QCQuery qObj) {
+	public String getCluster() {
+		return cluster;
+	}
+
+	public void setCluster(String cluster) {
+		this.cluster = cluster;
+	}
+
+	public String getServer() {
+		return server;
+	}
+
+	public void setServer(String server) {
+		this.server = server;
+	}
+
+	public String getId() {
+		return id;
+	}
+
+	public void setId(String id) {
+		this.id = id;
+	}
+
+	public String getBackend() {
+		return backend;
+	}
+
+	public void setBackend(String backend) {
+		this.backend = backend;
+	}
+
+	public String getUser() {
+		return user;
+	}
+
+	public void setUser(String user) {
+		this.user = user;
+	}
+
+	public String getType() {
+		return type;
+	}
+
+	public void setType(String type) {
+		this.type = type;
+	}
+
+	public String getStatement() {
+		return statement;
+	}
+
+	public void setStatement(String statement) {
+		this.statement = statement;
+	}
+
+	public String getClient() {
+		return client;
+	}
+
+	public void setClient(String client) {
+		this.client = client;
+	}
+
+	public String getState() {
+		return state;
+	}
+
+	public void setState(String state) {
+		this.state = state;
+	}
+
+	public long getRowCnt() {
+		return rowCnt;
+	}
+
+	public void setRowCnt(long rowCnt) {
+		this.rowCnt = rowCnt;
+	}
+
+	public long getStartTime() {
+		return startTime;
+	}
+
+	public void setStartTime(long startTime) {
+		this.startTime = startTime;
+	}
+
+	public long getEndTime() {
+		return endTime;
+	}
+
+	public void setEndTime(long endTime) {
+		this.endTime = endTime;
+	}
+
+	public long[] getTimeHistogram() {
+		return timeHistogram;
+	}
+
+	public void setTimeHistogram(long[] timeHistogram) {
+		this.timeHistogram = timeHistogram;
+	}
+
+	public long[] getExecProfile() {
+		return execProfile;
+	}
+
+	public void setExecProfile(long[] execProfile) {
+		this.execProfile = execProfile;
+	}
+
+	public long[] getFetchProfile() {
+		return fetchProfile;
+	}
+
+	public void setFetchProfile(long[] fetchProfile) {
+		this.fetchProfile = fetchProfile;
+	}
+
+	public long getUpdateTime() {
+		return updateTime;
+	}
+
+	public void setUpdateTime(long updateTime) {
+		this.updateTime = updateTime;
+	}
+
+	public long getUpdateCount() {
+		return updateCount;
+	}
+
+	public void setUpdateCount(long updateCount) {
+		this.updateCount = updateCount;
+	}
+
+	public String getCuqId() {
+		return cuqId;
+	}
+
+	public void setCuqId(String cuqId) {
+		this.cuqId = cuqId;
+	}
+
+	public String getCancelUrl() {
+		return cancelUrl;
+	}
+
+	public void setCancelUrl(String cancelUrl) {
+		this.cancelUrl = cancelUrl;
+	}
+
+	public boolean isAnormal() {
+		return anormal;
+	}
+
+	public void setAnormal(boolean anormal) {
+		this.anormal = anormal;
+	}
+
+	public static boolean update(QCQuery oq, QCQuery nq) {
+		
+    	SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
         boolean updated = false;
-        if ( !this.type.equals(qObj.type) ) {
-            if (DEBUG) System.console().printf("query %s update type %s -> %s\n", id, type, qObj.type);
-            this.type = qObj.type;
+        if (!oq.getType().equals(nq.getType())) {
+        	LOG.debug("query {} update type {} -> {}", oq.getId(), oq.getType(), nq.getType());
+            oq.setType(nq.getType());
             updated = true;
         }
-        if ( !this.state.equals(qObj.state) ) {
-            if (DEBUG) System.console().printf("query %s update state %s -> %s\n", id, state, qObj.state);
-            this.state = qObj.state;
+        if (!oq.getState().equals(nq.getState())) {
+            LOG.debug("query {} update state {} -> {}", oq.getId(), oq.getState(), nq.getState());
+            oq.setState(nq.getState());
             updated = true;
         }
-        if ( this.rowCnt != qObj.rowCnt ) {
-            if (DEBUG) System.console().printf("query %s update rowCnt %s -> %s\n", id, rowCnt, qObj.rowCnt);
-            this.rowCnt = qObj.rowCnt;
+        if (oq.getRowCnt() != nq.getRowCnt() ) {
+            LOG.debug("query {} update rowCnt {} -> {}", oq.getId(), oq.getRowCnt(), nq.getRowCnt());
+            oq.setRowCnt(nq.getRowCnt());
             updated = true;
         }
-        if ( this.endTime != qObj.endTime ) {
-            if (DEBUG) System.console().printf("query %s update rowCnt %s -> %s\n", id, endTime, qObj.endTime);
-            this.endTime = qObj.endTime;
+        if (oq.getEndTime() != nq.getEndTime()) {
+            LOG.debug("query {} update endTime {} -> %s", oq.getId(), 
+            		sdf.format(new Date(oq.getEndTime())), 
+            		sdf.format(new Date(nq.getEndTime())));
+            oq.setEndTime(nq.endTime);
             updated = true;
         }
-
-//        if ( !Arrays.equals(this.timeHistogram, qObj.timeHistogram) ) {
-//            this.timeHistogram = qObj.timeHistogram;
-//            updated = true;
-//        }
-//        if ( !Arrays.equals(this.execProfile, qObj.execProfile) ) {
-//            this.execProfile = qObj.execProfile;
-//            updated = true;
-//        }
-//        if ( !Arrays.equals(this.fetchProfile, qObj.fetchProfile) ) {
-//            this.fetchProfile = qObj.fetchProfile;
-//            updated = true;
-//        }
 
         if (updated) {
-            this.updateTime = new Date().getTime();
+            oq.setUpdateTime(System.currentTimeMillis());
+            oq.setUpdateCount(oq.getUpdateCount()+1);
         }
         return updated;
     }
 
-    public static String getCuqId(QCServer server, QCQuery.QueryImport qi) {
-        String cuqid = new String(Base64.encodeBase64((server.name+qi.connType+qi.queryId).trim().toUpperCase().getBytes()));
+    public static String getCuqId(String cluster, String server, QCQueryImport qi) {
+    	String key = server+qi.getConnType()+qi.getQueryId();
+        String cuqid = Base64.encodeBase64String(key.trim().getBytes());
         return cuqid.replace('+',':').replace('/','.').replace('=','-');
     }
 
-    public QueryExport export() {
-        QueryExport eq = new QueryExport();
-        eq.cuqId = cuqId;
-        // remove characters not supported by html4 standard for id field.
+	public boolean equals(Object o) {
+		return o instanceof QCQuery && cuqId.equals(((QCQuery)o).getCuqId());
+	}
 
-        eq.server = server.name;
-        eq.id = id;
-        eq.backend = backend;
-        eq.user = user;
-        eq.type = type;
-        eq.statement = statement;
-        eq.client = client;
-        eq.state = state;
-        eq.rowCnt = rowCnt;
-        eq.startTime = startTime;
-        eq.endTime = endTime;
-        eq.timeHistogram = new long[timeHistogram.length];
-        System.arraycopy(eq.timeHistogram, 0, timeHistogram, 0, timeHistogram.length);
-        if (execProfile != null) {
-            eq.execProfile = new long[execProfile.length];
-            System.arraycopy(eq.execProfile, 0, execProfile, 0, execProfile.length);
-        }
-        eq.fetchProfile = new long[fetchProfile.length];
-        System.arraycopy(eq.fetchProfile, 0, fetchProfile, 0, fetchProfile.length);
-        // eq.cancelUrl = "http://" + server.name + ":" + server.cluster.getOpt().webPort + "/api/cancelQuery?id="+id+"&driver="+backend;
-        eq.cancelUrl = "/api/qc/cancelQuery?cluster="+server.cluster.name+"&cuqId="+eq.cuqId;
-        return eq;
-    }
+//    public QueryExport export() {
+//        
+//        QueryExport qe = new QueryExport();
+//        qe.setCuqId(cuqId);
+//        qe.setServer(server);
+//        qe.setId(id);
+//        qe.setBackend(backend);
+//        qe.setUser(user);
+//        qe.setType(type);
+//        qe.setStatement(statement);
+//        qe.setClient(client);
+//        qe.setState(state);
+//        qe.setRowCnt(rowCnt);
+//        qe.setStartTime(startTime);
+//        qe.setEndTime(endTime);
+//        long[] cloneHistogram = new long[timeHistogram.length];
+//        System.arraycopy(timeHistogram, 0, cloneHistogram, 0, timeHistogram.length);
+//        qe.setTimeHistogram(cloneHistogram);
+//        if (execProfile != null) {
+//        	long[] cloneExec = new long[execProfile.length];
+//        	System.arraycopy(execProfile, 0, cloneExec, 0, execProfile.length);
+//        	qe.setExecProfile(cloneExec);
+//        }
+//       long [] cloneFetch = new long[fetchProfile.length];
+//       System.arraycopy(fetchProfile, 0, cloneFetch, 0, fetchProfile.length);
+//       qe.setFetchProfile(cloneFetch);
+//       qe.setCancelUrl("/api/qc/cancelQuery?cluster="+cluster+"&cuqId="+cuqId);
+//       return qe;
+//    }
 }

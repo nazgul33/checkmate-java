@@ -1,22 +1,25 @@
 package com.skplanet.checkmate.querycache;
 
-import com.skplanet.checkmate.utils.MailSender;
-import org.apache.commons.lang.time.DateUtils;
-
+import java.text.SimpleDateFormat;
 import java.util.Date;
+
+import com.skplanet.checkmate.utils.MailSender;
 
 /**
  * Created by nazgul33 on 4/8/16.
  */
 public class QCQueryMail extends MailSender.Mail {
-  public QCQueryMail(QCQuery.QueryExport query, String subject, String content) {
-    super(subject, content);
-    setContent( content + "\n\n" + queryToMailContent(query) );
-  }
+	
+	public QCQueryMail(QCQuery query, String subject, String content) {
+		super(subject);
+		setContent(content + "\n\n" + queryToMailContent(query) );
+	}
 
-  static String queryToMailContent(QCQuery.QueryExport query) {
-    StringBuilder sb = new StringBuilder();
-    /*
+	public static String queryToMailContent(QCQuery query) {
+
+		SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
+		StringBuilder sb = new StringBuilder();
+		/*
         public String cuqId; // cluster unique query id
         public String server;
         public String id;
@@ -35,18 +38,18 @@ public class QCQueryMail extends MailSender.Mail {
         public long[] execProfile;
         public long[] fetchProfile;
         public String cancelUrl;
-     */
-    sb.append("Server : ").append(query.server).append('\n');
-    sb.append("QueryId : ").append(query.id).append('\n');
-    sb.append("Backend : ").append(query.backend).append('\n');
-    sb.append("User : ").append(query.user).append('\n');
-    sb.append("State : ").append(query.state).append('\n');
-    sb.append("Fetched Rows : ").append(query.rowCnt).append('\n');
-    sb.append("StartTime : ").append( new Date(query.startTime) ).append('\n');
-    sb.append("Now : ").append( new Date() ).append('\n');
+		 */
+		sb.append("Server : ").append(query.getServer()).append('\n');
+		sb.append("QueryId : ").append(query.getId()).append('\n');
+		sb.append("Backend : ").append(query.getBackend()).append('\n');
+		sb.append("User : ").append(query.getUser()).append('\n');
+		sb.append("State : ").append(query.getState()).append('\n');
+		sb.append("Fetched Rows : ").append(query.getRowCnt()).append('\n');
+		sb.append("StartTime : ").append( sdf.format(new Date(query.getStartTime())) ).append('\n');
+		sb.append("Now : ").append( sdf.format(new Date()) ).append('\n');
 
-    sb.append("SQL : ").append(query.statement).append('\n');
+		sb.append("SQL : ").append(query.getStatement()).append('\n');
 
-    return sb.toString();
-  }
+		return sb.toString();
+	}
 }

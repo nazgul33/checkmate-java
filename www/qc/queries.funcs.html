@@ -1,7 +1,6 @@
 <script type="text/javascript">
   var g_cluster_name = '${param.cluster}';
   var g_rq = {};
-  var g_cq = [];
   var g_rq_table = null;
   var g_cq_table = null;
 
@@ -52,7 +51,7 @@
           +'</td><td class="qElapsedTime">'+(((new Date()) - q.startTime)/1000).toFixed(1)
           +'</td><td class="qCancel"><a href="#" class="btn btn-primary btn-xs ladda-button" data-style="zoom-in" data-size="xs" data-spinner-size="28" data-spinner-color="#ffffff" data-cuqId="'+ q.cuqId+'"><span class="ladda-label">Cancel</span></a>'+'</td></tr>';
       g_rq[q.cuqId] = q;
-      $(g_rq_table).append(contents);
+      $(g_rq_table).prepend(contents);
       $('#'+q.cuqId + ' .qCancel a', g_rq_table).click(function(e) {
         e.preventDefault();
         cuqId = this.getAttribute("data-cuqId");
@@ -87,7 +86,7 @@
       timeout:20000,
       success:function(r, ts, xhr) {
         var rqmap = {};
-        for (var i=0; i<r.data.length; i++) {
+        for (var i=r.data.length-1; i>-1; i--) {
           var q = r.data[i];
           addRunningQuery(q);
           rqmap[q.cuqId] = q;
@@ -111,14 +110,6 @@
   }
 
   function addCompleteQuery(q) {
-    console.log("cq.len " + g_cq.length);
-    if (g_cq.length > 99) {
-      for(var i=99; i<g_cq.length; i++) {
-        console.log("removing " + g_cq[i].id);
-        $('#'+g_cq[i].cuqId, g_cq_table).remove();
-      }
-    }
-    g_cq.unshift(q);
     var contents = '<tr id="' + q.cuqId + '"><td class="qServer">'+q.server
           +'</td><td class="qId">'+q.id
           +'</td><td class="qBackend">'+q.backend
@@ -131,15 +122,14 @@
           +'</td><td class="qElapsedTime">'+((q.endTime - q.startTime)/1000).toFixed(1)
           +'</td></tr>';
     $(g_cq_table).prepend(contents);
+    $('tr:gt(100)', g_cq_table).remove();
   }
 
-  function getCompleteQueries()
-  {
+  function getCompleteQueries() {
     $.getJSON('/api/qc/completeQueries?cluster='+g_cluster_name, function(r) {
       var contents = '';
-      g_cq = r.data;
-      for (var i=0; i<g_cq.length; i++) {
-        var q = g_cq[i];
+      for (var i=0; i<r.data.length; i++) {
+        var q = r.data[i];
         contents += '<tr id="' + q.cuqId + '"><td class="qServer">'+q.server
               +'</td><td class="qId">'+q.id
               +'</td><td class="qBackend">'+q.backend
@@ -176,22 +166,17 @@
       try {
         switch (msg.msgType) {
           case 'runningQueryAdded':
-              console.log("add");
             addRunningQuery(msg.query);
             break;
           case 'runningQueryUpdated':
-            console.log("update");
             addRunningQuery(msg.query);
             break;
           case 'runningQueryRemoved':
-            console.log("remove");
             if (msg.cuqId in g_rq) {
               if (g_rq[msg.cuqId].cancelling != true)
                 removeRunningQuery(msg.query);
             }
-            if (g_cq_table.length > 0) {
-              addCompleteQuery(msg.query);
-            }
+            addCompleteQuery(msg.query);
             break;
           case 'pong':
             break;

@@ -2,6 +2,7 @@ package com.skplanet.checkmate.servlet;
 
 
 import com.google.gson.Gson;
+import com.skplanet.checkmate.CheckMateServer;
 import com.skplanet.checkmate.querycache.QCCluster;
 import com.skplanet.checkmate.querycache.QCClusterManager;
 import org.eclipse.jetty.websocket.api.Session;
@@ -13,40 +14,32 @@ import org.slf4j.LoggerFactory;
  * Created by nazgul33 on 15. 2. 13.
  */
 public class CMQCServerWebSocket implements WebSocketListener {
-    private static final boolean DEBUG = false;
+    
     private static final Logger LOG = LoggerFactory.getLogger("websocket-server-qc");
 
-    private Session outbound;
+    private Session session;
     private int id = -1;
-    private QCClusterManager qcMgr = QCClusterManager.getInstance();
+    private QCClusterManager qcMgr = CheckMateServer.getClusterManager();
     private QCCluster cluster = null;
 
-    private static class RequestMsg {
-        public String request;
-        public String channel;
-        public String data;
-    }
-
     @Override
-    public void onWebSocketBinary(byte[] payload, int offset, int len)
-    {
+    public void onWebSocketBinary(byte[] payload, int offset, int len) {
         /* only interested in test messages */
     }
 
     @Override
-    public void onWebSocketClose(int statusCode, String reason)
-    {
-        this.outbound = null;
-        if ( this.id >= 0 && this.cluster != null) {
-            cluster.unSubscribe(id);
+    public void onWebSocketClose(int statusCode, String reason) {
+    	session.close();
+        if ( id >= 0 && cluster != null) {
+            cluster.unsubscribe(id);
         }
-        this.id = -1;
-        this.cluster = null;
+        id = -1;
+        cluster = null;
     }
 
     @Override
     public void onWebSocketConnect(Session session) {
-        this.outbound = session;
+        this.session = session;
     }
 
     @Override
@@ -56,7 +49,7 @@ public class CMQCServerWebSocket implements WebSocketListener {
 
     @Override
     public void onWebSocketText(String message) {
-        if (outbound == null || !outbound.isOpen())
+        if (session == null || !session.isOpen())
             return;
 
         Gson gson = new Gson();
@@ -64,15 +57,15 @@ public class CMQCServerWebSocket implements WebSocketListener {
         switch (msg.request) {
             case "subscribe": {
                 if ("cluster".equals(msg.channel)) {
-                    this.cluster = qcMgr.getCluster(msg.data);
-                    if (this.cluster != null) {
-                        this.id = this.cluster.subscribe(this);
+                    cluster = qcMgr.getCluster(msg.data);
+                    if (cluster != null) {
+                        id = cluster.subscribe(this);
                     }
                 }
                 return;
             }
             case "ping": {
-                outbound.getRemote().sendString("{\"msgType\":\"pong\"}", null);
+                sendMessage("{\"msgType\":\"pong\"}");
                 return;
             }
         }
@@ -81,8 +74,14 @@ public class CMQCServerWebSocket implements WebSocketListener {
     }
 
     public void sendMessage(String message) {
-        if (outbound == null || !outbound.isOpen())
+        if (session == null || !session.isOpen())
             return;
-        outbound.getRemote().sendString(message, null);
+        session.getRemote().sendString(message, null);
+    }
+    
+    private static class RequestMsg {
+        public String request;
+        public String channel;
+        public String data;
     }
 }

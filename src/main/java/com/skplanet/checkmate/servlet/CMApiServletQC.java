@@ -1,40 +1,50 @@
 package com.skplanet.checkmate.servlet;
 
-import com.google.gson.Gson;
-import com.google.gson.reflect.TypeToken;
-import com.skplanet.checkmate.querycache.QCCluster;
-import com.skplanet.checkmate.querycache.QCClusterManager;
-import com.skplanet.checkmate.querycache.QCQuery;
-import com.skplanet.checkmate.utils.HttpUtil;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import static java.lang.String.format;
+
+import java.io.IOException;
+import java.io.PrintWriter;
+import java.lang.reflect.Type;
+import java.util.Collection;
+import java.util.List;
 
 import javax.servlet.AsyncContext;
 import javax.servlet.ServletException;
 import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
-import java.io.IOException;
-import java.io.PrintWriter;
-import java.lang.reflect.Type;
-import java.util.Collection;
-import java.util.Date;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.google.gson.Gson;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonObject;
+import com.google.gson.reflect.TypeToken;
+import com.skplanet.checkmate.CheckMateServer;
+import com.skplanet.checkmate.querycache.QCCluster;
+import com.skplanet.checkmate.querycache.QCClusterManager;
+import com.skplanet.checkmate.querycache.QCQuery;
+import com.skplanet.checkmate.querycache.data.ClusterServerPoolInfo;
+import com.skplanet.checkmate.querycache.data.ClusterServerSysStats;
+import com.skplanet.checkmate.utils.HttpUtil;
 
 /**
  * Created by nazgul33 on 15. 1. 29.
  */
 public class CMApiServletQC extends HttpServlet {
-    private static final boolean DEBUG = false;
-    private static final Logger LOG = LoggerFactory.getLogger("api");
+	
+	private static final long serialVersionUID = 2564648276343514634L;
+	
+    private static final Logger LOG = LoggerFactory.getLogger(CMApiServletQC.class);
 
     private static final String ASYNC_REQ_ATTR = CMApiServletQC.class.getName() + ".async";
     private static final String ASYNC_RETURN_ATTR = CMApiServletQC.class.getName() + ".async.return";
+    
     protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
         response.setContentType("application/json; charset=utf-8");
 
-        if (DEBUG) {
-            LOG.debug(request.getRequestURI() + "?" + request.getQueryString());
-        }
+        LOG.info("{}?{}",request.getRequestURI(),request.getQueryString());
 
         PrintWriter writer = response.getWriter();
         String path = request.getRequestURI().substring(request.getContextPath().length());
@@ -43,12 +53,12 @@ public class CMApiServletQC extends HttpServlet {
             urlWithParameter += "?" + request.getQueryString();
         }
 
-        QCClusterManager qcMgr = QCClusterManager.getInstance();
+        QCClusterManager qcMgr = CheckMateServer.getClusterManager();
         Gson gson = new Gson();
         switch (path) {
             case "/clusterList": {
-                Collection<String> cl = qcMgr.getClusterList();
-                Type qListType = new TypeToken<Collection<String>>() {}.getType();
+                List<String> cl = qcMgr.getClusterNameList();
+                Type qListType = new TypeToken<List<String>>() {}.getType();
                 String jsonObj = gson.toJson(cl, qListType);
                 writer.printf("{\"result\":\"ok\", \"msg\":\"ok\", \"data\":%s}", jsonObj);
                 response.setStatus(HttpServletResponse.SC_OK);
@@ -57,8 +67,8 @@ public class CMApiServletQC extends HttpServlet {
             case "/runningQueries": {
                 QCCluster c = qcMgr.getCluster(request.getParameter("cluster"));
                 if (c!=null) {
-                    Collection<QCQuery.QueryExport> ql = c.getExportedRunningQueries();
-                    Type qListType = new TypeToken<Collection<QCQuery.QueryExport>>() {
+                    List<QCQuery> ql = c.getRunningQueries();
+                    Type qListType = new TypeToken<List<QCQuery>>() {
                     }.getType();
                     String jsonObj = gson.toJson(ql, qListType);
                     writer.printf("{\"result\":\"ok\", \"msg\":\"ok\", \"data\":%s}", jsonObj);
@@ -75,7 +85,7 @@ public class CMApiServletQC extends HttpServlet {
             case "/completeQueries": {
                 QCCluster c = qcMgr.getCluster(request.getParameter("cluster"));
                 if (c!=null) {
-                    Collection<QCQuery.QueryExport> ql = c.getExportedCompleteQueries();
+                    Collection<QCQuery> ql = c.getCompleteQueries();
 
                     /*
                     // TODO: paging, filtering
@@ -91,7 +101,7 @@ public class CMApiServletQC extends HttpServlet {
                     return ql.subList(page_number*page_size, (page_number + 1)*page_size);
                     */
 
-                    Type qListType = new TypeToken<Collection<QCQuery.QueryExport>>() {}.getType();
+                    Type qListType = new TypeToken<Collection<QCQuery>>() {}.getType();
                     String jsonObj = gson.toJson(ql, qListType);
                     writer.printf("{\"result\":\"ok\", \"msg\":\"ok\", \"data\":%s}", jsonObj);
                     response.setStatus(HttpServletResponse.SC_OK);
@@ -106,16 +116,22 @@ public class CMApiServletQC extends HttpServlet {
             case "/sysInfoList": {
                 QCCluster c = qcMgr.getCluster(request.getParameter("cluster"));
                 if (c!=null) {
-                    Collection<QCCluster.SystemInfo> l = c.getSystemInfo();
-                    Type lType = new TypeToken<Collection<QCCluster.SystemInfo>>() {
-                    }.getType();
-                    String jsonObj = gson.toJson(l, lType);
-                    writer.printf("{\"result\":\"ok\", \"msg\":\"ok\", \"data\":%s}", jsonObj);
+                    List<ClusterServerSysStats> list = c.getServerInfo();
+                    Type lType = new TypeToken<List<ClusterServerSysStats>>() {}.getType();
+                    JsonArray jarr = gson.toJsonTree(list , lType).getAsJsonArray();
+                    
+                    JsonObject json = new JsonObject();
+                    json.addProperty("result", "ok");
+                    json.addProperty("msg",    "ok");
+                    json.add("data",           jarr);
+                    writer.print(json.toString());
                     response.setStatus(HttpServletResponse.SC_OK);
-                }
-                else {
+                } else {
                     LOG.error(urlWithParameter + " : invalid parameter");
-                    writer.print("{\"result\":\"error\", \"msg\":\"invalid parameter\"}");
+                    JsonObject json = new JsonObject();
+                    json.addProperty("result", "error");
+                    json.addProperty("msg",    "invalid parameter");
+                    writer.print(json.toString());
                     response.setStatus(HttpServletResponse.SC_BAD_REQUEST);
                 }
                 break;
@@ -123,15 +139,22 @@ public class CMApiServletQC extends HttpServlet {
             case "/poolInfoList": {
                 QCCluster c = qcMgr.getCluster(request.getParameter("cluster"));
                 if (c != null) {
-                    Collection<QCCluster.PoolInfo> l = c.getPoolInfo();
-                    Type lType = new TypeToken<Collection<QCCluster.PoolInfo>>() {}.getType();
-                    String jsonObj = gson.toJson(l, lType);
-                    writer.printf("{\"result\":\"ok\", \"msg\":\"ok\", \"data\":%s}", jsonObj);
+                    List<ClusterServerPoolInfo> list = c.getPoolInfo();
+                    Type lType = new TypeToken<Collection<ClusterServerPoolInfo>>() {}.getType();
+                    JsonArray jarr = gson.toJsonTree(list , lType).getAsJsonArray();
+                    
+                    JsonObject json = new JsonObject();
+                    json.addProperty("result", "ok");
+                    json.addProperty("msg",    "ok");
+                    json.add("data",           jarr);
+                    writer.print(json.toString());
                     response.setStatus(HttpServletResponse.SC_OK);
-                }
-                else {
+                } else {
                     LOG.error(urlWithParameter + " : invalid parameter");
-                    writer.print("{\"result\":\"error\", \"msg\":\"invalid parameter\"}");
+                    JsonObject json = new JsonObject();
+                    json.addProperty("result", "error");
+                    json.addProperty("msg",    "invalid parameter");
+                    writer.print(json.toString());
                     response.setStatus(HttpServletResponse.SC_BAD_REQUEST);
                 }
                 break;
@@ -146,7 +169,7 @@ public class CMApiServletQC extends HttpServlet {
                         response.setStatus(HttpServletResponse.SC_BAD_REQUEST);
                         break;
                     }
-                    final QCQuery.QueryExport eq = c.getExportedRunningQueryByCuqId(cuqId);
+                    final QCQuery eq = c.getRunningQueryByCuqId(cuqId);
                     if ( eq == null ) {
                         response.setContentType("application/json; charset=utf-8");
                         response.setStatus(HttpServletResponse.SC_OK);
@@ -155,7 +178,7 @@ public class CMApiServletQC extends HttpServlet {
                         break;
                     }
 
-                    LOG.info("Starting cancel async job. " + eq.server + " " + eq.backend + " " + eq.id);
+                    LOG.info("Starting cancel async job. " + eq.getServer() + " " + eq.getBackend() + " " + eq.getId());
                     final AsyncContext async = request.startAsync();
                     request.setAttribute(ASYNC_REQ_ATTR, new Boolean(true));
                     async.setTimeout(30000);
@@ -163,10 +186,12 @@ public class CMApiServletQC extends HttpServlet {
                         @Override
                         public void run() {
                             HttpUtil httpUtil = new HttpUtil();
-                            StringBuffer buf = new StringBuffer();
-                            int res = 0;
+                            StringBuilder buf = new StringBuilder();
                             try {
-                                String url = "http://" + eq.server + ":" + c.getOpt().webPort + "/api/cancelQuery?id="+eq.id+"&driver="+eq.backend;
+                                String url = format("http://%s:%s%s",
+                                		eq.getServer(),
+                                		c.getOptions().getWebPort(),
+                                		"/api/cancelQuery?id="+eq.getId()+"&driver="+eq.getBackend());
 
                                 httpUtil.get( url, buf );
                                 async.getRequest().setAttribute(ASYNC_RETURN_ATTR, buf.toString());

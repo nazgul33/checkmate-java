@@ -94,10 +94,11 @@ table.fixed
 {
 	table-layout: fixed;
 }
+
 td.qServer,
 th.qServer
 {
-	width: 50px;
+	width: 100px;
 	padding-left: 1px;
 	padding-right: 1px;
 }
@@ -105,7 +106,7 @@ th.qServer
 td.qId,
 th.qId
 {
-	width: 52px;
+	width: 102px;
 	padding-left: 1px;
 	padding-right: 1px;
 }
@@ -113,7 +114,7 @@ th.qId
 td.qBackend,
 th.qBackend
 {
-	width: 72px;
+	width: 102px;
 	padding-left: 1px;
 	padding-right: 1px;
 }
@@ -121,7 +122,7 @@ th.qBackend
 td.qUser,
 th.qUser
 {
-	width: 72px;
+	width: 102px;
 	padding-left: 1px;
 	padding-right: 1px;
 }
@@ -137,7 +138,7 @@ th.qStatement
 td.qState,
 th.qState
 {
-	width: 48px;
+	width: 102px;
 	padding-left: 1px;
 	padding-right: 1px;
 }
@@ -145,7 +146,7 @@ th.qState
 td.qClient,
 th.qClient
 {
-	width: 90px;
+	width: 122px;
 	padding-left: 1px;
 	padding-right: 1px;
 }
@@ -156,12 +157,13 @@ th.qRows
 	width: 72px;
 	padding-left: 1px;
 	padding-right: 1px;
+	text-align:right;
 }
 
 td.qStartTime,
 th.qStartTime
 {
-	width: 80px;
+	width: 120px;
 	padding-left: 1px;
 	padding-right: 1px;
 }
@@ -169,7 +171,7 @@ th.qStartTime
 td.qElapsedTime,
 th.qElapsedTime
 {
-	width: 90px;
+	width: 150px;
 	padding-left: 1px;
 	padding-right: 1px;
 }
