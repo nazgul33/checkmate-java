@@ -7,7 +7,7 @@ import org.apache.commons.codec.binary.Base64;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.skplanet.checkmate.querycache.data.QCQueryImport;
+import com.skplanet.querycache.server.cli.QueryProfile;
 
 /**
  * Created by nazgul33 on 15. 1. 27.
@@ -30,7 +30,7 @@ public class QCQuery {
     private long endTime = 0;
     // 0:exec/1:getmeta/2:fetch/3:stmtclose or
     // 1:getschemas/2:fetch
-    private long[] timeHistogram;
+    private Long[] timeHistogram;
     private long[] execProfile;
     private long[] fetchProfile;
 
@@ -41,17 +41,17 @@ public class QCQuery {
     private long updateCount;
     private boolean anormal = false;
 
-    public QCQuery(String cluster, String server, QCQueryImport qObj) {
+    public QCQuery(String cluster, String server, QueryProfile qObj) {
     	
     	this.cluster       = cluster;
         this.server        = server;
         this.id            = qObj.getQueryId();
         this.backend       = qObj.getConnType();
         this.user          = qObj.getUser();
-        this.type          = qObj.getQueryType();
+        this.type          = (qObj.getQueryType()!=null?qObj.getQueryType().name():null);
         this.statement     = qObj.getQueryStr();
         this.client        = qObj.getClientIp();
-        this.state         = qObj.getStmtState();
+        this.state         = (qObj.getStmtState()!=null?qObj.getStmtState().name():null);
         this.rowCnt        = qObj.getRowCnt();
         this.startTime     = qObj.getStartTime();
         this.endTime       = qObj.getEndTime();
@@ -162,11 +162,11 @@ public class QCQuery {
 		this.endTime = endTime;
 	}
 
-	public long[] getTimeHistogram() {
+	public Long[] getTimeHistogram() {
 		return timeHistogram;
 	}
 
-	public void setTimeHistogram(long[] timeHistogram) {
+	public void setTimeHistogram(Long[] timeHistogram) {
 		this.timeHistogram = timeHistogram;
 	}
 
@@ -260,7 +260,7 @@ public class QCQuery {
         return updated;
     }
 
-    public static String getCuqId(String cluster, String server, QCQueryImport qi) {
+    public static String getCuqId(String cluster, String server, QueryProfile qi) {
     	String key = server+qi.getConnType()+qi.getQueryId();
         String cuqid = Base64.encodeBase64String(key.trim().getBytes());
         return cuqid.replace('+',':').replace('/','.').replace('=','-');
@@ -269,34 +269,4 @@ public class QCQuery {
 	public boolean equals(Object o) {
 		return o instanceof QCQuery && cuqId.equals(((QCQuery)o).getCuqId());
 	}
-
-//    public QueryExport export() {
-//        
-//        QueryExport qe = new QueryExport();
-//        qe.setCuqId(cuqId);
-//        qe.setServer(server);
-//        qe.setId(id);
-//        qe.setBackend(backend);
-//        qe.setUser(user);
-//        qe.setType(type);
-//        qe.setStatement(statement);
-//        qe.setClient(client);
-//        qe.setState(state);
-//        qe.setRowCnt(rowCnt);
-//        qe.setStartTime(startTime);
-//        qe.setEndTime(endTime);
-//        long[] cloneHistogram = new long[timeHistogram.length];
-//        System.arraycopy(timeHistogram, 0, cloneHistogram, 0, timeHistogram.length);
-//        qe.setTimeHistogram(cloneHistogram);
-//        if (execProfile != null) {
-//        	long[] cloneExec = new long[execProfile.length];
-//        	System.arraycopy(execProfile, 0, cloneExec, 0, execProfile.length);
-//        	qe.setExecProfile(cloneExec);
-//        }
-//       long [] cloneFetch = new long[fetchProfile.length];
-//       System.arraycopy(fetchProfile, 0, cloneFetch, 0, fetchProfile.length);
-//       qe.setFetchProfile(cloneFetch);
-//       qe.setCancelUrl("/api/qc/cancelQuery?cluster="+cluster+"&cuqId="+cuqId);
-//       return qe;
-//    }
 }

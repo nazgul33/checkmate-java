@@ -25,7 +25,7 @@
 				var p = r.data[i].connPoolList;
 				for (var j=0; j<p.length; j++) {
 					c2 += '<tr><td>'+((j==0)?r.data[i].server:'&nbsp;')+'</td><td>'+p[j].driver+'</td><td>'+
-					p[j].free+'</td><td>'+p[j].using+'</td></tr>';
+					p[j].free+'</td><td>'+p[j].using+'</td><td>'+p[j].direct+'</td><td>'+p[j].cumulation+'</td></tr>';
 				}
 			}
 
@@ -57,7 +57,7 @@
 	<H2>Connection Pool Stats</H2>
 	<table class="table table-striped small table-nonfluid" id="connpool">
 		<thead><tr>
-			<th>server</th><th>backend</th><th>free</th><th>in use</th>
+			<th>server</th><th>backend</th><th>pool free</th><th>pool used</th><th>direct</th><th>created</th>
 		</tr></thead>
 		<tbody>
 		</tbody>

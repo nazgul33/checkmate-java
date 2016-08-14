@@ -16,7 +16,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.google.gson.Gson;
-import com.skplanet.checkmate.querycache.data.QCQueryImport;
+import com.skplanet.querycache.servlet.QCEventRequest;
+import com.skplanet.querycache.servlet.QCEventResponse;
 
 /**
  * Created by nazgul33 on 15. 2. 23.
@@ -24,12 +25,6 @@ import com.skplanet.checkmate.querycache.data.QCQueryImport;
 public class QCWebSocketClient implements WebSocketListener {
 
 	private static final Logger LOG = LoggerFactory.getLogger(QCWebSocketClient.class);
-
-	public static final String EVENT_RUN_QUERY_ADDED = "runningQueryAdded";
-	public static final String EVENT_RUN_QUERY_UPDATED = "runningQueryUpdated";
-	public static final String EVENT_RUN_QUERY_REMOVED = "runningQueryRemoved";
-	public static final String EVENT_RESULT = "result";
-	public static final String EVENT_PONG = "pong";
 
 	private WebSocketClient client;
 	private Session session;
@@ -43,6 +38,8 @@ public class QCWebSocketClient implements WebSocketListener {
 	private String url;
 	private URI uri;
 
+	private Gson gson = new Gson();
+	
 	public QCWebSocketClient(final QCServer server, final String url) throws URISyntaxException {
 
 		this.cluster = server.getCluster().getName();
@@ -134,14 +131,10 @@ public class QCWebSocketClient implements WebSocketListener {
 		this.session = session;
 		LOG.info("websocket connected {} {}", cluster, url);
 
-		RequestMsg req = new RequestMsg();
-		req.request = "subscribe";
-		req.channel = "runningQueries";
-
-		Gson gson = new Gson();
-		String msg = gson.toJson(req);
-
-		sendMessage(msg);
+		QCEventRequest req = new QCEventRequest();
+		req.setRequest(QCEventRequest.REQ_SUBSCRIBE);
+		req.setChannel(QCEventRequest.CHN_RUNNINGQUERIES);
+		sendMessage(gson.toJson(req));
 	}
 
 	@Override
@@ -156,37 +149,37 @@ public class QCWebSocketClient implements WebSocketListener {
 
 	@Override
 	public void onWebSocketText(String message) {
-		Gson gson = new Gson();
-		RunningQueryEvent evt = null;
+
+		QCEventResponse res = null;
 		try {
-			evt = gson.fromJson(message, RunningQueryEvent.class);
+			res = gson.fromJson(message, QCEventResponse.class);
 		} catch (Exception e) {
 			LOG.error("Gson exception :", message);
 		}
 
-		if (evt == null || evt.msgType == null) {
+		if (res == null || res.getMsgType() == null) {
 			LOG.error("invalid event object received.", message);
 			return;
 		}
 
-		switch (evt.msgType) {
-		case EVENT_RUN_QUERY_ADDED:
-		case EVENT_RUN_QUERY_UPDATED:
+		switch (res.getMsgType()) {
+		case QCEventResponse.ADD:
+		case QCEventResponse.UPDATE:
 			LOG.debug("new RT query {} {}", cluster, url);
-			if (evt.query != null) {
-				listener.processWebSocketAddEvent(evt.query);
+			if (res.getQuery() != null) {
+				listener.processWebSocketAddEvent(res.getQuery());
 			}
 			break;
-		case EVENT_RUN_QUERY_REMOVED:
+		case QCEventResponse.REMOVE:
 			LOG.debug("removing RT query {} {}", cluster, url);
-			if (evt.query != null) {
-				listener.processWebSocketRemoveEvent(evt.query);
+			if (res.getQuery() != null) {
+				listener.processWebSocketRemoveEvent(res.getQuery());
 			}
 			break;
-		case EVENT_RESULT:
-			LOG.debug("result {} {} {} ",cluster, url, evt.result);
+		case QCEventResponse.RESULT:
+			LOG.debug("result {} {} {} ",cluster, url, res.getResult());
 			break;
-		case EVENT_PONG:
+		case QCEventResponse.PONG:
 			LOG.debug("pong {} {}", cluster, url);
 			break;
 		default:
@@ -203,22 +196,8 @@ public class QCWebSocketClient implements WebSocketListener {
 
 	private void ping() {
 		LOG.debug("ping {} {}", cluster, url);
-		Gson gson = new Gson();
-		RequestMsg msg = new RequestMsg();
-		msg.request = "ping";
-		sendMessage(gson.toJson(msg));
-	}
-
-	private static class RequestMsg {
-		public String request;
-		public String channel;
-		public String data;
-	}
-
-	private static class RunningQueryEvent {
-		public String msgType = null;
-		public String result = null;
-		public QCQueryImport query = null;
-		public String queryId = null;
+		QCEventRequest req = new QCEventRequest();
+		req.setRequest(QCEventRequest.REQ_PING);
+		sendMessage(gson.toJson(req));
 	}
 }

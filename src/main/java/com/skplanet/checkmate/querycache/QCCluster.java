@@ -24,8 +24,8 @@ import com.skplanet.checkmate.CheckMateServer;
 import com.skplanet.checkmate.querycache.data.ClusterServerPoolInfo;
 import com.skplanet.checkmate.querycache.data.ClusterServerSysStats;
 import com.skplanet.checkmate.querycache.data.QCQueryEvent;
-import com.skplanet.checkmate.querycache.data.ServerObjectPool;
 import com.skplanet.checkmate.servlet.CMQCServerWebSocket;
+import com.skplanet.querycache.servlet.QCEventResponse;
 
 /**
  * Created by nazgul33 on 15. 1. 27.
@@ -164,7 +164,6 @@ public class QCCluster {
         return list;
     }
 
-    @SuppressWarnings("unchecked")
 	public List<ClusterServerPoolInfo> getPoolInfo() {
         List<ClusterServerPoolInfo> list = new ArrayList<>(serverMap.size());
         for (QCServer server:serverMap.values()) {
@@ -222,7 +221,7 @@ public class QCCluster {
     	QCQueryEvent evt = new QCQueryEvent(type, query);
     	
         synchronized (evtQueueList) {
-            if (QCQueryEvent.RUN_QUERY_REMOVED.equals(evt.getMsgType())) {
+            if (QCEventResponse.REMOVE.equals(evt.getMsgType())) {
                 Iterator<QCQueryEvent> it = evtQueueList.iterator();
                 while (it.hasNext()) {
                 	QCQueryEvent rqe = it.next();

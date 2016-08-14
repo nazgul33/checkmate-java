@@ -1,18 +1,23 @@
 package com.skplanet.checkmate.querycache.data;
 
+import com.skplanet.querycache.servlet.QCApiJVMRuntimeInfo;
+import com.skplanet.querycache.servlet.QCApiSystemInfo;
+import com.skplanet.querycache.servlet.QCApiThreadInfo;
+import com.skplanet.querycache.servlet.QCApiServerSystemStats;
+
 public class ClusterServerSysStats {
 	private String server;
-	private ServerRuntimeInfo jvm;
-	private ServerSystemInfo system;
-	private ServerThreadInfo threads;
+	private QCApiJVMRuntimeInfo jvm;
+	private QCApiSystemInfo system;
+	private QCApiThreadInfo threads;
 
 	public ClusterServerSysStats(){}
 	
-	public ClusterServerSysStats(String server, ServerSystemStats svrStats) {
+	public ClusterServerSysStats(String server, QCApiServerSystemStats svrStats) {
 		this.server = server;
-		this.jvm = (svrStats!=null?svrStats.getJvm():new ServerRuntimeInfo());
-		this.system = (svrStats!=null?svrStats.getSystem():new ServerSystemInfo());
-		this.threads = (svrStats!=null?svrStats.getThreads():new ServerThreadInfo());
+		this.jvm = (svrStats!=null?svrStats.getJvm():new QCApiJVMRuntimeInfo());
+		this.system = (svrStats!=null?svrStats.getSystem():new QCApiSystemInfo());
+		this.threads = (svrStats!=null?svrStats.getThreads():new QCApiThreadInfo());
 	}
 
 	public String getServer() {
@@ -21,22 +26,22 @@ public class ClusterServerSysStats {
 	public void setServer(String server) {
 		this.server = server;
 	}
-	public ServerRuntimeInfo getJvm() {
+	public QCApiJVMRuntimeInfo getJvm() {
 		return jvm;
 	}
-	public void setJvm(ServerRuntimeInfo jvm) {
+	public void setJvm(QCApiJVMRuntimeInfo jvm) {
 		this.jvm = jvm;
 	}
-	public ServerSystemInfo getSystem() {
+	public QCApiSystemInfo getSystem() {
 		return system;
 	}
-	public void setSystem(ServerSystemInfo system) {
+	public void setSystem(QCApiSystemInfo system) {
 		this.system = system;
 	}
-	public ServerThreadInfo getThreads() {
+	public QCApiThreadInfo getThreads() {
 		return threads;
 	}
-	public void setThreads(ServerThreadInfo threads) {
+	public void setThreads(QCApiThreadInfo threads) {
 		this.threads = threads;
 	}
 }

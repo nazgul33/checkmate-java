@@ -15,7 +15,7 @@ import org.slf4j.LoggerFactory;
  */
 public class CMQCServerWebSocket implements WebSocketListener {
     
-    private static final Logger LOG = LoggerFactory.getLogger("websocket-server-qc");
+    private static final Logger LOG = LoggerFactory.getLogger(CMQCServerWebSocket.class);
 
     private Session session;
     private int id = -1;
@@ -53,19 +53,21 @@ public class CMQCServerWebSocket implements WebSocketListener {
             return;
 
         Gson gson = new Gson();
-        RequestMsg msg = gson.fromJson(message, RequestMsg.class);
-        switch (msg.request) {
-            case "subscribe": {
-                if ("cluster".equals(msg.channel)) {
-                    cluster = qcMgr.getCluster(msg.data);
+        CMQCEventRequest msg = gson.fromJson(message, CMQCEventRequest.class);
+        switch (msg.getRequest()) {
+            case CMQCEventRequest.REQ_SUBSCRIBE: {
+                if (CMQCEventRequest.CHN_CLUSTER.equals(msg.getChannel())) {
+                    cluster = qcMgr.getCluster(msg.getData());
                     if (cluster != null) {
                         id = cluster.subscribe(this);
                     }
                 }
                 return;
             }
-            case "ping": {
-                sendMessage("{\"msgType\":\"pong\"}");
+            case CMQCEventRequest.REQ_PING : {
+            	CMQCEventResponse res = new CMQCEventResponse();
+            	res.setMsgType(CMQCEventResponse.PONG);
+                sendMessage(gson.toJson(res));
                 return;
             }
         }
@@ -79,9 +81,5 @@ public class CMQCServerWebSocket implements WebSocketListener {
         session.getRemote().sendString(message, null);
     }
     
-    private static class RequestMsg {
-        public String request;
-        public String channel;
-        public String data;
-    }
+
 }

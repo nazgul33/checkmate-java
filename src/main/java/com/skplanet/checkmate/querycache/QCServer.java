@@ -22,13 +22,14 @@ import com.codahale.metrics.SlidingTimeWindowReservoir;
 import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
 import com.skplanet.checkmate.CheckMateServer;
-import com.skplanet.checkmate.querycache.data.QCQueryEvent;
-import com.skplanet.checkmate.querycache.data.QCQueryImport;
-import com.skplanet.checkmate.querycache.data.ServerConDesc;
-import com.skplanet.checkmate.querycache.data.ServerObjectPool;
-import com.skplanet.checkmate.querycache.data.ServerQueries;
-import com.skplanet.checkmate.querycache.data.ServerSystemStats;
 import com.skplanet.checkmate.utils.HttpUtil;
+import com.skplanet.querycache.server.cli.ObjectPool;
+import com.skplanet.querycache.server.cli.ObjectPool.QCObjectPoolProfile;
+import com.skplanet.querycache.server.cli.QueryProfile;
+import com.skplanet.querycache.servlet.QCApiConDesc;
+import com.skplanet.querycache.servlet.QCApiServerQueries;
+import com.skplanet.querycache.servlet.QCEventResponse;
+import com.skplanet.querycache.servlet.QCApiServerSystemStats;
 
 /**
  * Created by nazgul33 on 15. 1. 27.
@@ -48,9 +49,9 @@ public class QCServer {
     private QCClusterOptions clusterOpt;
 
     private String wsUrl;
-    private List<ServerConDesc> conDescList;
-    private ServerObjectPool objectPool;
-    private ServerSystemStats systemStats;
+    private List<QCApiConDesc> conDescList;
+    private QCObjectPoolProfile objectPool;
+    private QCApiServerSystemStats systemStats;
 
     private long lastExceptionTime;
 
@@ -62,7 +63,9 @@ public class QCServer {
 	private String systemUrl;
 	private String connectionUrl;
 	private String objectpoolUrl;
-	
+
+	private Gson gson = new Gson();
+
     public QCServer(QCCluster cluster, String name) throws URISyntaxException {
     	
         this.cluster = cluster;
@@ -131,16 +134,15 @@ public class QCServer {
     	long t0 = System.currentTimeMillis();
         try {
             String content = HttpUtil.get(queriesUrl);
-            Gson gSon = new Gson();
-            ServerQueries queries = gSon.fromJson(content, ServerQueries.class);
+            QCApiServerQueries queries = gson.fromJson(content, QCApiServerQueries.class);
 
             List<QCQuery> runningList = new ArrayList<>(queries.getRunningQueries().size());
-            for (QCQueryImport qi:queries.getRunningQueries()) {
+            for (QueryProfile qi:queries.getRunningQueries()) {
             	QCQuery query = new QCQuery(cluster.getName(), name, qi);
             	runningList.add(query);
             }
         	List<QCQuery> completeList = new ArrayList<>(queries.getCompleteQueries().size());
-        	for (QCQueryImport qi:queries.getCompleteQueries()) {
+        	for (QueryProfile qi:queries.getCompleteQueries()) {
         		QCQuery query = new QCQuery(cluster.getName(), name, qi);
         		completeList.add((query));
         	}
@@ -154,9 +156,9 @@ public class QCServer {
         			if (!runningList.contains(value)) {
         				int compIdx = completeList.indexOf(value);
         				if (compIdx > -1) {
-            				cluster.addQueryEvent(QCQueryEvent.RUN_QUERY_REMOVED, completeList.get(compIdx));
+            				cluster.addQueryEvent(QCEventResponse.REMOVE, completeList.get(compIdx));
         				} else {
-            				cluster.addQueryEvent(QCQueryEvent.RUN_QUERY_REMOVED, value);
+            				cluster.addQueryEvent(QCEventResponse.REMOVE, value);
         				}
         				iter.remove();
         			}
@@ -166,11 +168,11 @@ public class QCServer {
         			QCQuery rquery = runningMap.get(query.getCuqId());
         			if (rquery != null) {
         				if (QCQuery.update(rquery, query)) {
-        					cluster.addQueryEvent(QCQueryEvent.RUN_QUERY_UPDATED, rquery);
+        					cluster.addQueryEvent(QCEventResponse.UPDATE, rquery);
         				}
         			} else {
         				runningMap.put(query.getCuqId(), query);
-        				cluster.addQueryEvent(QCQueryEvent.RUN_QUERY_ADDED, query);
+        				cluster.addQueryEvent(QCEventResponse.ADD, query);
         				queryCount.incrementAndGet();
         			}
         		}
@@ -182,7 +184,7 @@ public class QCServer {
                     // complete query has no changes. process new complete queries only.
                     if (!completeMap.containsKey(query.getCuqId())) {
                         completeMap.put(query.getCuqId(), query);
-                        cluster.addQueryEvent(QCQueryEvent.RUN_QUERY_REMOVED, query);
+                        cluster.addQueryEvent(QCEventResponse.REMOVE, query);
                         added++;
                     }
                 }
@@ -208,9 +210,9 @@ public class QCServer {
         try {
         	String content = HttpUtil.get(connectionUrl);
             Gson gSon = new Gson();
-            conDescList = gSon.fromJson(content, new TypeToken<ArrayList<ServerConDesc>>(){}.getType());
+            conDescList = gSon.fromJson(content, new TypeToken<ArrayList<QCApiConDesc>>(){}.getType());
             if (LOG.isDebugEnabled()) {
-                for (ServerConDesc con: conDescList) {
+                for (QCApiConDesc con: conDescList) {
                     LOG.debug("{}.{} con={} free={} using={}", 
                     		cluster.getName(), name, 
                     		con.getDriver(), con.getFree(), con.getUsing());
@@ -231,7 +233,7 @@ public class QCServer {
         try {
             String content = HttpUtil.get(objectpoolUrl);
             Gson gSon = new Gson();
-            objectPool = gSon.fromJson(content, ServerObjectPool.class);
+            objectPool = gSon.fromJson(content, ObjectPool.QCObjectPoolProfile.class);
             LOG.debug("{}.{} pool {} {} {} {} {}",
             		cluster.getName(), 
             		name,
@@ -255,7 +257,7 @@ public class QCServer {
         try {
         	String content = HttpUtil.get(systemUrl);
             Gson gSon = new Gson();
-            systemStats = gSon.fromJson(content, ServerSystemStats.class);
+            systemStats = gSon.fromJson(content, QCApiServerSystemStats.class);
             
             LOG.debug("{}.{} total threads={}, runtime memused={}", 
             		cluster.getName(), name, 
@@ -273,15 +275,15 @@ public class QCServer {
         }
     }
 
-    public ServerSystemStats getSystemStats() {
+    public QCApiServerSystemStats getSystemStats() {
         return systemStats;
     }
 
-    public ServerObjectPool getObjectPool() {
+    public QCObjectPoolProfile getObjectPool() {
         return objectPool;
     }
 
-    public List<ServerConDesc> getConnDescList() {
+    public List<QCApiConDesc> getConnDescList() {
         return conDescList;
     }
     
@@ -303,7 +305,7 @@ public class QCServer {
     	}
     }
     
-    public void processWebSocketAddEvent(QCQueryImport queryImport) {
+    public void processWebSocketAddEvent(QueryProfile queryImport) {
     	
     	QCQuery query = new QCQuery(cluster.getName(), name, queryImport);
     	synchronized(runningMap) {
@@ -311,17 +313,17 @@ public class QCServer {
     		if (rquery != null) {
     			boolean updated = QCQuery.update(rquery, query);
     			if (updated) {
-    				cluster.addQueryEvent(QCQueryEvent.RUN_QUERY_UPDATED, rquery);
+    				cluster.addQueryEvent(QCEventResponse.UPDATE, rquery);
     			}
     		} else {
     			runningMap.put(query.getCuqId(), query);
     			queryCount.incrementAndGet();
-    			cluster.addQueryEvent(QCQueryEvent.RUN_QUERY_ADDED, query);
+    			cluster.addQueryEvent(QCEventResponse.ADD, query);
     		}
     	}
     }
 
-    public void processWebSocketRemoveEvent(QCQueryImport queryImport) {
+    public void processWebSocketRemoveEvent(QueryProfile queryImport) {
     	
     	QCQuery query = new QCQuery(cluster.getName(), name, queryImport);
     	synchronized(runningMap) {
@@ -332,7 +334,7 @@ public class QCServer {
     	synchronized(completeMap) {
     		if (!completeMap.containsKey(query.getCuqId())) {
     			completeMap.put(query.getCuqId(), query);
-                cluster.addQueryEvent(QCQueryEvent.RUN_QUERY_REMOVED, query);
+                cluster.addQueryEvent(QCEventResponse.REMOVE, query);
     		}
     	}
     }
