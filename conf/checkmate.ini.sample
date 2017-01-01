@@ -1,8 +1,9 @@
 [global]
-WebPort = 60080
+WebPort = 8082
+UseWebSocket = false
 
 [email]
 SmtpServer =
 SmtpFrom = CheckMate<noreply@checkmate.com>
-SmtpPort = 25
+SmtpPort = 
 MailRecipients = 

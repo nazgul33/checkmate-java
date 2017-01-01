@@ -132,7 +132,7 @@
     <dependency>
       <groupId>com.skplanet.querycache</groupId>
       <artifactId>querycache-server</artifactId>
-      <version>0.26.0-SNAPSHOT</version>
+      <version>0.26.15-SNAPSHOT</version>
     </dependency>
   </dependencies>
 </project>

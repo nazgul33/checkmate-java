@@ -27,16 +27,17 @@ import org.slf4j.LoggerFactory;
 
 import com.codahale.metrics.MetricRegistry;
 import com.codahale.metrics.servlets.MetricsServlet;
-import com.skplanet.checkmate.servlet.CMApiServletQC;
-import com.skplanet.checkmate.servlet.CMWebSocketServletQC;
+import com.skplanet.checkmate.servlet.CMQCApiServlet;
+import com.skplanet.checkmate.servlet.CMQCWebSocketServlet;
 
-public class CheckMateWeb {
+public class CheckMateWebServer {
 
-	private static final Logger LOG = LoggerFactory.getLogger(CheckMateWeb.class);
+	private static final Logger LOG = LoggerFactory.getLogger(CheckMateWebServer.class);
 
-	private Server webServer = null;
+	private Server webServer;
 
-	public CheckMateWeb(int port, File rootDir, MetricRegistry metric) throws Exception {
+	public CheckMateWebServer(int port, boolean useWebSocket, File rootDir, MetricRegistry metric) throws Exception {
+		
 		LOG.info("Starting web interface...");
 		webServer = new Server(port);
 
@@ -44,6 +45,7 @@ public class CheckMateWeb {
 		if (!webRoot.exists()) {
 			throw new FileNotFoundException("Unable to find resource " + webRoot);
 		}
+		
 		// Points to wherever /www/ (the resource) is
 		URI baseUri = webRoot.toURI();
 
@@ -55,8 +57,10 @@ public class CheckMateWeb {
 
 		ServletContextHandler apiQc = new ServletContextHandler(ServletContextHandler.SESSIONS);
 		apiQc.setContextPath("/api/qc");
-		apiQc.addServlet(new ServletHolder(new CMWebSocketServletQC()), "/websocket/*");
-		apiQc.addServlet(new ServletHolder(new CMApiServletQC()), "/*");
+		if (useWebSocket) {
+			apiQc.addServlet(new ServletHolder(new CMQCWebSocketServlet()), "/websocket/*");
+		}
+		apiQc.addServlet(new ServletHolder(new CMQCApiServlet()), "/*");
 
 		ServletContextHandler metrics = new ServletContextHandler(ServletContextHandler.SESSIONS);
 		metrics.setContextPath("/api/metrics");

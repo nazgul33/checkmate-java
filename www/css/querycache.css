@@ -95,91 +95,91 @@ table.fixed
 	table-layout: fixed;
 }
 
+td,
+th{
+	word-break: break-all;
+	padding-left: 1px;
+    padding-right: 1px;
+}
+
+th {
+    text-align:left;
+}
+
+td.qRight
+{
+	text-align:right;
+}
+td.qLeft
+{
+	text-align:left;
+}
+td.qCenter
+{
+	text-align:center;
+}
 td.qServer,
 th.qServer
 {
-	width: 100px;
-	padding-left: 1px;
-	padding-right: 1px;
+	width: 170px;
 }
 
 td.qId,
 th.qId
 {
-	width: 102px;
-	padding-left: 1px;
-	padding-right: 1px;
-}
-
-td.qBackend,
-th.qBackend
-{
-	width: 102px;
-	padding-left: 1px;
-	padding-right: 1px;
+	width: 120px;
 }
 
 td.qUser,
 th.qUser
 {
-	width: 102px;
-	padding-left: 1px;
-	padding-right: 1px;
+	width: 70px;
 }
 
-td.qStatement,
-th.qStatement
+td.qQuery,
+th.qQuery
 {
-	padding-left: 1px;
-	padding-right: 1px;
-	word-wrap: break-word;
+	width:%;
 }
 
 td.qState,
 th.qState
 {
-	width: 102px;
-	padding-left: 1px;
-	padding-right: 1px;
+	width: 80px;
 }
 
 td.qClient,
 th.qClient
 {
-	width: 122px;
-	padding-left: 1px;
-	padding-right: 1px;
+	width: 100px;
 }
 
 td.qRows,
 th.qRows
 {
-	width: 72px;
-	padding-left: 1px;
-	padding-right: 1px;
-	text-align:right;
+	width: 80px;
 }
 
 td.qStartTime,
 th.qStartTime
 {
-	width: 120px;
-	padding-left: 1px;
-	padding-right: 1px;
+	width: 90px;
+}
+
+td.qEndTime,
+th.qEndTime
+{
+    width: 90px;
 }
 
 td.qElapsedTime,
 th.qElapsedTime
 {
-	width: 150px;
-	padding-left: 1px;
-	padding-right: 1px;
+	width: 80px;
 }
 
 td.qCancel,
 th.qCancel
 {
-	width: 90px;
-	padding-left: 1px;
-	padding-right: 1px;
+	width: 80px;
 }

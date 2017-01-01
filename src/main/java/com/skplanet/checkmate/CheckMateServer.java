@@ -1,5 +1,7 @@
 package com.skplanet.checkmate;
 
+import static com.skplanet.checkmate.ConfigKeys.*;
+
 import java.io.File;
 
 import org.apache.commons.configuration.HierarchicalINIConfiguration;
@@ -26,7 +28,7 @@ public class CheckMateServer {
     private final HierarchicalINIConfiguration ini;
 
     private QCClusterManager clusterManager;
-    private CheckMateWeb webServer;
+    private CheckMateWebServer webServer;
 
     private static CheckMateServer _this = null;
     
@@ -34,23 +36,23 @@ public class CheckMateServer {
 
     	confDir = new File(homeDir, "conf");
 
-    	File iniFile = new File(confDir,"checkmate.ini");
+    	File iniFile = new File(confDir, CHECKMATE_INI_FILE);
         LOG.info("reading checkmate configuration from " + iniFile);
 
         ini = new HierarchicalINIConfiguration(iniFile);
         
-        SubnodeConfiguration globalSection = ini.getSection("global");
-        globalSection.setThrowExceptionOnMissing(true);
+        SubnodeConfiguration global = ini.getSection(CHECKMATE_GLOBAL_SECTION);
+        global.setThrowExceptionOnMissing(true);
         
         // MailSender
         {
-            SubnodeConfiguration email = ini.getSection("email");
+            SubnodeConfiguration email = ini.getSection(CHECKMATE_EMAIL_SECTION);
             email.setThrowExceptionOnMissing(true);
             
-            String server = email.getString("SmtpServer", null);
-            String from   = email.getString("SmtpFrom", "CheckMate<noreply@checkmate.com>");
-            int port      = email.getInt("SmtpPort", 25);
-            String tos    = email.getString("MailRecipients", null);
+            String server = email.getString(CHECKMATE_EMAIL_SMTP_SERVER, null);
+            String from   = email.getString(CHECKMATE_EMAIL_SMTP_FROM, null);
+            int port      = email.getInt(CHECKMATE_EMAIL_SMTP_PORT, CHECKMATE_EMAIL_STMP_PORT_DEFAULT);
+            String tos    = email.getString(CHECKMATE_EMAIL_RECIPIENTS, null);
 
             if (server != null && !server.isEmpty() && tos != null && !tos.isEmpty()) {
             	MailSender.initialize(server, port, from,  tos.split(","));
@@ -64,8 +66,9 @@ public class CheckMateServer {
         
         // WebServer
         {
-        	int port = globalSection.getInt("WebPort", 8080);
-        	webServer = new CheckMateWeb(port, homeDir, metrics);
+        	int port = global.getInt(CHECKMATE_WEB_PORT, CHECKMATE_WEB_PORT_DEFAULT);
+        	boolean useWebSocket = global.getBoolean(CHECKMATE_USER_WEBSOCET, CHECKMATE_USER_WEBSOCET_DEFAULT);
+        	webServer = new CheckMateWebServer(port, useWebSocket, homeDir, metrics);
         }
     }
     

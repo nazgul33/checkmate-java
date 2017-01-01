@@ -51,31 +51,29 @@
 </script>
 
 <div class="container-fluid" align="center">
-<div style="width: 90%" align="left">
 
-<div style="float: left; width: 50%;">
-	<H2>Connection Pool Stats</H2>
-	<table class="table table-striped small table-nonfluid" id="connpool">
-		<thead><tr>
-			<th>server</th><th>backend</th><th>pool free</th><th>pool used</th><th>direct</th><th>created</th>
-		</tr></thead>
-		<tbody>
-		</tbody>
-	</table>
-</div>
+	<div style="text-align:left;display:inline-block;">
+		<H2>Connection Pool Stats</H2>
+		<table class="table table-striped table-nonfluid small" id="connpool">
+			<thead><tr>
+				<th>server</th><th>backend</th><th>pool free</th><th>pool used</th><th>direct</th><th>created</th>
+			</tr></thead>
+			<tbody>
+			</tbody>
+		</table>
+	</div>
 
-<div style="float: right; width: 50%;">
-	<H2>Object Pool Stats</H2>
-	<table class="table table-striped small table-nonfluid" id="objpool">
-		<thead><tr>
-			<th>server</th><th>TROWSET</th><th>TROW</th><th>TCOLUMNVALUE</th><th>TSTRINGVALUE</th>
-		</tr></thead>
-		<tbody>
-		</tbody>
-	</table>
-</div>
+	<div style="text-align:left;display:inline-block;">
+		<H2>Object Pool Stats</H2>
+		<table class="table table-striped table-nonfluid small" id="objpool">
+			<thead><tr>
+				<th>server</th><th>TROWSET</th><th>TROW</th><th>TCOLUMNVALUE</th><th>TSTRINGVALUE</th>
+			</tr></thead>
+			<tbody>
+			</tbody>
+		</table>
+	</div>
 
-</div>
 </div>
 
 </body>
