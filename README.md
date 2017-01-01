@@ -1,15 +1,24 @@
-# checkmate-java
+checkmate-java
+==========
 
-CheckMate is a cluster monitoring system.
+# 프로젝트 설명
 
-currently there is a nodejs version of checkmate which monitors impala cluster.
-due to many problems it's facing, the author decided to move to java.
+- QueryCache를 한 눈에 모니터링할 수 있는 데시보드
 
-first supported system is QueryCache( https://github.com/izlley/querycache )
-impala will be moved to this project soon.
+# 빌드 방법
 
-the author is planning to support more hadoop based sql engines.
+```bash
+$ ./mkdist.sh
+$ ls checkmate-dist.tgz
+```
 
-features planned:
-  1. graphic chart showing various usage metrics
-  2. authentication
+
+# 설치 방법
+
+```
+$ upload checkmate-dist.tgz to hdfs@DICc-m002:/app/home/hdfs/admin/deploy_new/dipkg/checkmate
+$ ./deploy_checkmate.sh server
+```
+
+# 위키 링크
+* [CheckMate](http://wiki.skplanet.com/display/DIT/CheckMate)

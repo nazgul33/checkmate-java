@@ -1,193 +1,101 @@
 package com.skplanet.checkmate.querycache;
 
+import static com.skplanet.checkmate.ConfigKeys.*;
+
+import java.io.File;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.atomic.AtomicLong;
+
 import org.apache.commons.configuration.ConfigurationException;
 import org.apache.commons.configuration.HierarchicalINIConfiguration;
 import org.apache.commons.configuration.SubnodeConfiguration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.*;
-import java.util.concurrent.atomic.AtomicBoolean;
-
 /**
  * Created by nazgul33 on 15. 1. 27.
  */
 public class QCClusterManager {
-    private static final Logger LOG = LoggerFactory.getLogger("querycache");
-    private static QCClusterManager qcMgr = null;
+	
+    private static final Logger LOG = LoggerFactory.getLogger(QCClusterManager.class);
+    
+    private Map<String, QCCluster> clusterMap = new HashMap<>();
+    private Map<String, QCClusterOptions> optionMap = new HashMap<>();
+    private AtomicLong eventSubscriberIdx = new AtomicLong(0);
 
-    private Map<String, QCCluster.Options> clusterConfigMap = new HashMap<>();
-
-    private int fullUpdateInterval = 10 * 1000;
-    private int pingWebSocketsInterval = 5 * 1000;
-
-    private void readConfiguration() {
-        String home = System.getenv("CM_HOME");
-        if (home == null) {
-            home = "./";
-        }
-        String conf = home + "/conf/querycache.ini";
-        HierarchicalINIConfiguration clusterConfigFile = null;
-        String[] clusterNames;
-        QCCluster.Options options[];
-
+    public QCClusterManager(File confDir) throws Exception {
+    	
+    	File iniFile = new File(confDir, QUERYCACHE_INI_FILE);
+        HierarchicalINIConfiguration ini = null;
+        
         try {
-            LOG.info("reading checkmate::querycache configuration from " + conf);
-            clusterConfigFile = new HierarchicalINIConfiguration(conf);
-            SubnodeConfiguration globalSection = clusterConfigFile.getSection(null);
-            globalSection.setThrowExceptionOnMissing(true);
-            clusterNames = globalSection.getStringArray("Clusters");
-            fullUpdateInterval = globalSection.getInt("FullUpdateInterval");
-
-            for (String cn: clusterNames) {
-                SubnodeConfiguration sc = clusterConfigFile.getSection(cn);
-                QCCluster.Options opt = new QCCluster.Options();
-                opt.webPort = sc.getInt("WebPort");
-                opt.servers = sc.getStringArray("Servers");
-
-                if (clusterConfigFile.containsKey(cn)) {
+            LOG.info("reading checkmate::querycache configuration from " + iniFile);
+            ini = new HierarchicalINIConfiguration(iniFile);
+            
+            SubnodeConfiguration global = ini.getSection("global");
+            global.setThrowExceptionOnMissing(true);
+            
+            long partialUpdateInterval = global.getLong(PARTIAL_UPDATE_INTERAVAL, PARTIAL_UPDATE_INTERVAL_DEFAULT);
+            long fullUpdateInterval    = global.getLong(FULL_UPDATE_INTERVAL, FULL_UPDATE_INTERVAL_DEFAULT);
+            long updateFailSleepTime   = global.getLong(UPDATE_FAIL_SLEEP_TIME, UPDATE_FAIL_SLEEP_TIME_DEFAULT);
+            String[] cnames            = global.getStringArray(CLUSTER_NAMES);
+            for (String cname: cnames) {
+            	
+                SubnodeConfiguration sc = ini.getSection(cname);
+                QCClusterOptions opts = new QCClusterOptions();
+                opts.setWebPort(sc.getInt(CLUSTER_WEB_PORT, CLUSTER_WEB_PORT_DEFFAULT));
+                opts.setServers(sc.getStringArray(CLUSTER_SERVERS));
+                opts.setMaxCompleteQueries(sc.getInt(CLUSTER_MAX_COMPLETE_QUERIES, CLUSTER_MAX_COMPLETE_QUERIES_DEFAULT));
+                opts.setUseWebSocket(sc.getBoolean(CLUSTER_USE_WEBSOCKET, CLUSTER_USER_WEBSOCKE_DEFAULT));
+                opts.setFullUpdateInterval(fullUpdateInterval);
+                opts.setPartialUpdateInterval(partialUpdateInterval);
+                opts.setUpdateFailSleepTime(updateFailSleepTime);
+                
+                if (ini.containsKey(cname)) {
                     throw new ConfigurationException("duplicate cluster definition");
                 }
-                clusterConfigMap.put(cn, opt);
+                optionMap.put(cname, opts);
+                
+                QCCluster cluster = new QCCluster(cname, optionMap.get(cname));
+                clusterMap.put(cname, cluster);
             }
-        }
-        catch (Exception e) {
-            LOG.error("error loading configuration.", e);
-            System.exit(1);
+        } catch (Exception e) {
+            throw new Exception("error loading configuration. "+iniFile, e);
         }
     }
 
-    public class QCClusterThread implements Runnable {
-        private class QCClusterFullUpdateTask extends TimerTask {
-            @Override
-            public void run() {
-                if ( !QCClusterThread.this.fullUpdateTaskRunning.compareAndSet(false, true) ) {
-                    // update task is running. skip this time....
-                    LOG.warn("a full update task is running. skipping full update task");
-                    return;
-                }
-
-                QCClusterManager.qcMgr.UpdateClusters();
-                lastFullUpdate = new Date();
-                QCClusterThread.this.fullUpdateTaskRunning.set(false);
-            }
-        }
-
-        private class QCClusterWebSocketPingTask extends TimerTask {
-            @Override
-            public void run() {
-                QCClusterManager.qcMgr.pingWebSockets();
-            }
-        }
-
-        private class QCCounterUpdateTask extends TimerTask {
-            @Override
-            public void run() {
-                for (QCCluster cluster: clusters) {
-                    cluster.updateCounters();
-                }
-            }
-        }
-        TimerTask qcTimerFull = new QCClusterFullUpdateTask();
-        TimerTask qcTimerPingWebSockets = new QCClusterWebSocketPingTask();
-        TimerTask qcCounterUpdateTask = new QCCounterUpdateTask();
-
-        AtomicBoolean fullUpdateTaskRunning = new AtomicBoolean(false);
-        Date lastFullUpdate = new Date();
-
-        @Override
-        public void run() {
-            Timer timerFull = new Timer(true);
-            Timer timerPingWebSockets = new Timer(true);
-            Timer timerCounterUpdateTask = new Timer(true);
-
-            timerFull.scheduleAtFixedRate(qcTimerFull, 0, fullUpdateInterval);
-            timerPingWebSockets.scheduleAtFixedRate(qcTimerPingWebSockets, 0, pingWebSocketsInterval);
-            timerCounterUpdateTask.scheduleAtFixedRate(qcCounterUpdateTask, 60*1000, 60*1000);
-            while (!QCClusterManager.this.quitThread) {
-                try {
-                    Thread.sleep(100);
-                } catch (Exception e) {
-                }
-            }
-
-            timerFull.cancel();
-            timerPingWebSockets.cancel();
-        }
-    }
-
-    public static QCClusterManager getInstance() {
-        if (qcMgr == null) {
-            qcMgr = new QCClusterManager();
-        }
-
-        return qcMgr;
-    }
-
-    private List<QCCluster> clusters = new ArrayList<>();
-    private Thread qcClusterThread = new Thread(this.new QCClusterThread());
-    private boolean quitThread = false;
-
-    protected QCClusterManager() {
-        readConfiguration();
-
-        // initialize clusters;
-        for (Map.Entry<String, QCCluster.Options> entry: clusterConfigMap.entrySet()) {
-            QCCluster cluster = new QCCluster(entry.getKey(), entry.getValue());
-            clusters.add(cluster);
-        }
-
-        // initialize thread;
-        qcClusterThread = new Thread(this.new QCClusterThread());
-    }
-
-    public void startThread() {
-        qcClusterThread.start();
+    public void start() {
+    	for (QCCluster cluster:clusterMap.values()) {
+    		cluster.start();
+    	}
     }
 
     // stop
-    public void finishThread() {
-        quitThread = true;
-        try {
-            qcClusterThread.join();
-        } catch (Exception e) {
-            LOG.error("exception while waiting for thread " + e.toString());
-        }
+    public void stop() {
+    	for (QCCluster cluster:clusterMap.values()) {
+    		cluster.close();
+    	}
     }
-    public void UpdateClusters() {
-        for (QCCluster cluster: clusters) {
-            cluster.Update();
-        }
+    
+    public QCCluster getCluster(String name) {
+    	return clusterMap.get(name);
     }
 
-    public QCCluster getCluster(String clusterName) {
-        for (QCCluster c: clusters) {
-            if (c.name.equals(clusterName)) {
-                return c;
-            }
-        }
-        return null;
+    public QCClusterOptions getClusterOptions(String name) {
+    	return optionMap.get(name);
     }
-
-    public Collection<String> getClusterList() {
-        List<String> cl = new ArrayList<>();
-        for (QCCluster c: clusters) {
-            cl.add(c.name);
-        }
-        return cl;
+    
+    public List<String> getClusterNameList() {
+    	List<String> list = new ArrayList<>(clusterMap.keySet());
+    	Collections.sort(list);
+    	return list;
     }
-
-    private void pingWebSockets() {
-        for (QCCluster cluster: clusters) {
-            for (QCServer server: cluster.getServers().values()) {
-                QCClientWebSocket ws = server.getRtWebSocket();
-                if (ws == null) {
-                    server.connectRealtimeWebSocket();
-                }
-                else {
-                    ws.ping();
-                }
-            }
-        }
+    
+    public long getEventSubscriberIdx() {
+        return eventSubscriberIdx.incrementAndGet();
     }
 }

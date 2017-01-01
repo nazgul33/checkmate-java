@@ -1,7 +1,11 @@
+[global]
 PartialUpdateInterval = 3000
 FullUpdateInterval = 10000
+UpdateFailSleepTime = 300000;
 Clusters = "myCluster"
 
 [myCluster]
 WebPort = 8080
 Servers = localhost
+MaxCompleteQueries = 100
+UseWebSocket = false

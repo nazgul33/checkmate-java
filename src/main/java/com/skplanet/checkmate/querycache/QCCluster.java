@@ -1,384 +1,415 @@
 package com.skplanet.checkmate.querycache;
 
+import java.io.IOException;
+import java.net.URISyntaxException;
+import java.util.ArrayDeque;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+import java.util.Map.Entry;
+import java.util.Timer;
+import java.util.TimerTask;
+import java.util.concurrent.TimeUnit;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import com.codahale.metrics.Histogram;
 import com.codahale.metrics.SlidingTimeWindowReservoir;
 import com.google.gson.Gson;
 import com.skplanet.checkmate.CheckMateServer;
-import com.skplanet.checkmate.servlet.CMQCServerWebSocket;
-import com.skplanet.checkmate.utils.MailSender;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-import java.awt.*;
-import java.util.*;
-import java.util.List;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;
+import com.skplanet.checkmate.ConfigKeys;
+import com.skplanet.checkmate.querycache.data.ClusterServerPoolInfo;
+import com.skplanet.checkmate.querycache.data.ClusterServerSysStats;
+import com.skplanet.checkmate.servlet.CMQCWebSocket;
+import com.skplanet.querycache.server.cli.ObjectPool.QCObjectPoolProfile;
+import com.skplanet.querycache.server.cli.QueryProfile;
+import com.skplanet.querycache.server.common.SQLUtil;
+import com.skplanet.querycache.servlet.QCApiConDesc;
+import com.skplanet.querycache.servlet.QCApiServerSystemStats;
+import com.skplanet.querycache.servlet.QCWebSocket.ChangedProfile;
 
 /**
  * Created by nazgul33 on 15. 1. 27.
  */
 public class QCCluster {
-    private static final boolean DEBUG = false;
-    private static final Logger LOG = LoggerFactory.getLogger("querycache");
-    private static final int MAX_COMPLETE_QUERIES = 100;
-    private static final String RQE_ADDED = "runningQueryAdded";
-    private static final String RQE_UPDATED = "runningQueryUpdated";
-    private static final String RQE_REMOVED = "runningQueryRemoved";
 
-    static public class Options {
-        public int webPort = 8080;
-        public int partialUpdateInterval = 3000;
-        public int fullUpdateInterval = 10000;
-        public String[] servers;
-    }
+	private static final Logger LOG = LoggerFactory.getLogger(QCCluster.class);
 
-    public final String name;
-    private Map<String, QCServer> servers;
-    private Options opt;
+	private int MAX_COMPLETE_QUERIES = 100;
 
-    private Timer notifyTimer = new Timer();
-    Histogram histogram;
+	private String name;
+	private QCClusterOptions opts;
 
-    public QCCluster(String name, Options opt) {
-        this.name = name;
-        this.opt = opt;
+	private Map<String, QCServer> serverMap = new HashMap<>();
 
-        servers = new HashMap<>();
-        for (String serverName : opt.servers) {
-            if (servers.containsKey(serverName)) {
-                System.console().printf("duplicate server name %s\n", serverName);
-                System.exit(1);
-            }
-            servers.put(serverName, new QCServer(serverName, this));
-        }
+	private Map<String, QueryProfile> runningMap = new HashMap<>();
+	private ArrayDeque<QueryProfile> completeList = new ArrayDeque<>();
+	
+	private Map<String, QCObjectPoolProfile> objectPoolMap = new HashMap<>();
+	private Map<String, QCApiServerSystemStats> systemStatMap = new HashMap<>();
+	private Map<String, List<QCApiConDesc>> connectionMap = new HashMap<>();
 
-        TimerTask wsNotifyTask = new TimerTask() {
-            @Override
-            public void run() {
-                notifySubscribers();
-            }
-        };
-        notifyTimer.scheduleAtFixedRate(wsNotifyTask, 0, 50);
-        notifyTimer.scheduleAtFixedRate(queryAnomalyDetectorTask, 5000L, 5000L);
+	private EventManager eventManager;
 
-        histogram = new Histogram( new SlidingTimeWindowReservoir(5L, TimeUnit.MINUTES) );
-        CheckMateServer.getMetrics().register("queries."+name, histogram);
-    }
+	private Histogram histogram;
 
-    public void updateCounters() {
-        int count = 0;
-        for (Map.Entry<String, QCServer> entry : servers.entrySet()) {
-            count += entry.getValue().updateQueryCount();
-        }
-        histogram.update(count);
-    }
-    public Map<String, QCServer> getServers() {
-        return servers;
-    }
+	private long partialUpdateInterval;
+	private long fullUpdateInterval;
 
-    public QCServer getServer(String name) {
-        return servers.get(name);
-    }
+	private Thread eventThread;
+	private Thread fullUpdateThread;
+	private Thread partialUpdateThread;
+	private Timer histogramTimer = new Timer(true);
+	
+	private boolean running = true;
 
-    public void Update() {
-        // update all servers
-        Date start = new Date();
-        for (Map.Entry<String, QCServer> entry : servers.entrySet()) {
-            QCServer server = entry.getValue();
-            server.Update();
+	private Gson gson = new Gson();
 
-            // update sysinfo
-            QCServer.SysInfoCollection sysInfo = server.getSysInfoCollection();
-            if (sysInfo != null) {
-                SystemInfo mySysInfo = sysInfoMap.get(server.name);
-                if ( mySysInfo == null) {
-                    mySysInfo = new SystemInfo();
-                    mySysInfo.server = server.name;
-                    sysInfoMap.put(server.name, mySysInfo);
-                }
-                mySysInfo.jvm = sysInfo.jvm;
-                mySysInfo.system = sysInfo.system;
-                mySysInfo.threads = sysInfo.threads;
-            }
+	public QCCluster(String name, QCClusterOptions opts) throws URISyntaxException, IOException {
 
-            QCServer.ObjectPool objPoolInfo = server.getObjectPool();
-            Collection<QCServer.ConDesc> connPoolInfo = server.getConnections();
-            if (objPoolInfo != null && connPoolInfo != null) {
-                PoolInfo myPoolInfo = poolInfoMap.get(server.name);
-                if ( myPoolInfo == null) {
-                    myPoolInfo = new PoolInfo();
-                    myPoolInfo.server = server.name;
-                    poolInfoMap.put(server.name, myPoolInfo);
-                }
-                myPoolInfo.objPool = objPoolInfo;
-                myPoolInfo.connPoolList = connPoolInfo;
-            }
-        }
-        Date end = new Date();
-        if (DEBUG) {
-            LOG.debug("Updating cluster " + name + " took " + (end.getTime() - start.getTime()) + " ms");
-        }
+		this.name = name;
+		this.opts = opts;
+		this.fullUpdateInterval    = opts.getFullUpdateInterval();
+		this.partialUpdateInterval = opts.getPartialUpdateInterval();
 
-        refreshExportedCompleteQueries();
-    }
+		this.MAX_COMPLETE_QUERIES = opts.getMaxCompleteQueries();
 
-    public Options getOpt() {
-        return opt;
-    }
+		for (String serverName : opts.getServers()) {
+			if (serverMap.containsKey(serverName)) {
+				throw new IOException("duplicate server name=" + serverName);
+			} else {
+				serverMap.put(serverName, new QCServer(this, serverName));
+			}
+		}
+		
+		histogram = new Histogram( new SlidingTimeWindowReservoir(5L, TimeUnit.MINUTES) );
 
-    MailSender mailSender = CheckMateServer.getInstance().getMailSender();
-    private class EventAnomalyDetector {
-        private static final long longRunningLimit = 900L * 1000L; // 900 sec
-        boolean longRunningQuery = false;
-        QCQuery.QueryExport query = null;
+		CheckMateServer.getMetrics().register("queries."+name, histogram);
 
-        void detect() {
-            long now = System.currentTimeMillis();
-            if ( query == null )
-                return;
+		if (opts.isUseWebSocket()) {
+			eventManager = new EventManager();
+			eventThread = new Thread() {
+				@Override
+				public void run() {
+					LOG.info("Cluster {} WebSocket Start", name);
 
-            if (!longRunningQuery) {
-                if (query.startTime + longRunningLimit < now &&
-                    ("EXEC".equals(query.state) || "INIT".equals(query.state))) {
-                    longRunningQuery = true;
+					while (running) {
+						eventManager.send();
+						try {
+							TimeUnit.MILLISECONDS.sleep(1000);
+						} catch (InterruptedException e) {
+							LOG.error("Cluster {} WebSocket interrupted", name);
+							break;
+						}
+					}
+					running = false;
+					LOG.info("Cluster {} WebSocket Stop", name);
+				}
+			};
+			eventThread.start();
+		} else {
+			this.partialUpdateInterval = Math.min(this.partialUpdateInterval, 3000);
+			this.fullUpdateInterval    = Math.min(this.fullUpdateInterval, 5000);
+		}
+	}
 
-                    LOG.info("Slow query {}:{}", query.backend, query.id);
-                    if (mailSender != null) mailSender.addMail(
-                        new QCQueryMail(query, "Slow Query by " + query.user, "Slow query detected by CheckMate.")
-                    );
-                }
-            }
-        }
-    }
+	public String getName() {
+		return name;
+	}
 
-    private final HashMap<String, EventAnomalyDetector> detectorMap = new HashMap<>();
+	public QCServer getServer(String name) {
+		return serverMap.get(name);
+	}
 
-    TimerTask queryAnomalyDetectorTask = new TimerTask() {
-        @Override
-        public void run() {
-            Map<String, EventAnomalyDetector> dMap;
-            synchronized (detectorMap) {
-                dMap = new HashMap<>(detectorMap);
-            }
-            for ( Map.Entry<String, EventAnomalyDetector> entry : dMap.entrySet() ) {
-                entry.getValue().detect();
-            }
-        }
-    };
+	public QCClusterOptions getOptions() {
+		return opts;
+	}
 
-    private static class RunningQueryEvent {
-        public long timestamp = System.currentTimeMillis();
-        public String msgType = null;
-        public QCQuery.QueryExport query = null;
-        public String cuqId = null;
-    }
+	public void start() {
 
-    private final Map<String, QCQuery.QueryExport> exportedRunningQueriesMap = new HashMap<>();
-    public QCQuery.QueryExport getExportedRunningQueryByCuqId(String cuqId) {
-        QCQuery.QueryExport q;
-        synchronized (exportedRunningQueriesMap) {
-            q = exportedRunningQueriesMap.get(cuqId);
-        }
-        return q;
-    }
+		for (QCServer server:serverMap.values()) {
+			server.start();
+		}
 
-    public void addExportedRunningQuery(QCQuery q) {
-        QCQuery.QueryExport eq = q.export();
-        boolean queryUpdated;
-        synchronized (exportedRunningQueriesMap) {
-            queryUpdated = (exportedRunningQueriesMap.put(eq.cuqId, eq) != null);
-        }
-        synchronized (detectorMap) {
-            EventAnomalyDetector det = detectorMap.get(eq.cuqId);
-            if (det != null)
-                det.query = eq;
-            else {
-                det = new EventAnomalyDetector();
-                det.query = eq;
-                detectorMap.put(eq.cuqId, det);
-            }
-        }
+		fullUpdateThread = new Thread() {
 
-        RunningQueryEvent evt = new RunningQueryEvent();
-        evt.msgType = queryUpdated? RQE_UPDATED:RQE_ADDED;
-        evt.query = eq;
-        evt.cuqId = eq.cuqId;
-        addRunningQueryEvent(evt);
-    }
+			@Override
+			public void run() {
+				LOG.info("Cluster {} Full Update API Start", name);
+				while (running) {
+					for (QCServer server:serverMap.values()) {
+						server.updateFull();
+					}
+					try {
+						TimeUnit.MILLISECONDS.sleep(fullUpdateInterval);
+					} catch (InterruptedException e) {
+						break;
+					}
+				}
+				LOG.info("Cluster {} Full Update API Stop", name);
+			}
+		};
+		fullUpdateThread.start();
 
-    public void removeExportedRunningQuery(QCQuery q) {
-        synchronized (exportedRunningQueriesMap) {
-            exportedRunningQueriesMap.remove(q.cuqId);
-        }
-        synchronized (detectorMap) {
-            detectorMap.remove(q.cuqId);
-        }
-        QCQuery.QueryExport eq = q.export();
-        RunningQueryEvent evt = new RunningQueryEvent();
-        evt.msgType = RQE_REMOVED;
-        evt.query = eq;
-        evt.cuqId = eq.cuqId;
-        addRunningQueryEvent(evt);
-    }
+		partialUpdateThread = new Thread() {
 
-    public Collection<QCQuery.QueryExport> getExportedRunningQueries() {
-        List<QCQuery.QueryExport> ql = new ArrayList<>();
-        synchronized (exportedRunningQueriesMap) {
-            ql.addAll(exportedRunningQueriesMap.values());
-        }
-        Collections.sort(ql, new Comparator<QCQuery.QueryExport>() {
-            @Override
-            public int compare(QCQuery.QueryExport o1, QCQuery.QueryExport o2) {
-                return ((o1.startTime - o2.startTime) < 0) ? -1 : (o1.startTime == o2.startTime) ? 0 : 1;
-            }
-        });
-        return ql;
-    }
+			@Override
+			public void run() {
+				LOG.info("Cluster {} Partial Update API Start", name);
+				while (running) {
+					for (QCServer server:serverMap.values()) {
+						server.updatePartial();
+					}
+					try {
+						TimeUnit.MILLISECONDS.sleep(partialUpdateInterval);
+					} catch (InterruptedException e) {
+						break;
+					}
+				}
+				LOG.info("Cluster {} Partial Update API Stop", name);
+			}
+		};
+		partialUpdateThread.start();
+		
+		histogramTimer.scheduleAtFixedRate(new TimerTask() {
 
-    // complete query update accelerators
-    private final List<QCQuery> tmpCompleteQueries = new ArrayList<>();
-    void queueCompleteQuery(QCQuery q) {
-        synchronized (tmpCompleteQueries) {
-            tmpCompleteQueries.add(q);
-        }
-    }
+			@Override
+			public void run() {
+				int count = 0;
+				for (QCServer server:serverMap.values()) {
+					count += server.getAndResetQueryCount();
+				}
+				histogram.update(count);				
+			}
+		}, 60*1000, 60*1000);
+	}
 
-    private final LinkedList<QCQuery.QueryExport> exportedCompleteQueries = new LinkedList<>();
-    private void refreshExportedCompleteQueries() {
-        synchronized (tmpCompleteQueries) {
-            Collections.sort(tmpCompleteQueries, new Comparator<QCQuery>() {
-                @Override
-                public int compare(QCQuery o1, QCQuery o2) {
-                    return (o2.endTime > o1.endTime) ? 1 : (o2.endTime == o1.endTime) ? 0 : -1;
-                }
-            });
+	public void close() {
+		running = false;
+		if (eventThread != null) {
+			eventThread.interrupt();
+		}
+		if (fullUpdateThread != null) {
+			fullUpdateThread.interrupt();
+		}
+		if (partialUpdateThread != null) {
+			partialUpdateThread.interrupt();
+		}
+		histogramTimer.cancel();
 
-            synchronized (exportedCompleteQueries) {
-                for (QCQuery q: tmpCompleteQueries) {
-                    // addFirst() to make most recent query comes first.
-                    exportedCompleteQueries.addFirst(q.export());
-                }
+		for (QCServer server:serverMap.values()) {
+			server.stop();
+		}
+	}
 
-                // maintain size of exportedCompleteQueries
-                int toRemove = exportedCompleteQueries.size() - MAX_COMPLETE_QUERIES;
-                if (toRemove > 0) {
-                    for (int i=0; i<toRemove; i++) {
-                        exportedCompleteQueries.removeLast();
-                    }
-                }
-            }
-            tmpCompleteQueries.clear();
-        }
-    }
+	public void putSystemStats(String server, QCApiServerSystemStats stat) {
+		systemStatMap.put(server, stat);
+	}
 
-    // TODO: getting subset of complete queries
-    public Collection<QCQuery.QueryExport> getExportedCompleteQueries() {
-        List<QCQuery.QueryExport> ql = new ArrayList<>();
-        synchronized (exportedCompleteQueries) {
-            ql.addAll(exportedCompleteQueries);
-        }
-        return ql;
-    }
+	public List<ClusterServerSysStats> getServerInfo() {
+		List<ClusterServerSysStats> list = new ArrayList<>(serverMap.size());
+		for (QCServer server:serverMap.values()) {
+			list.add(new ClusterServerSysStats(server.getName(), systemStatMap.get(server.getName())));
+		}
+		Collections.sort(list, new Comparator<ClusterServerSysStats>() {
+			@Override
+			public int compare(ClusterServerSysStats o1, ClusterServerSysStats o2) {
+				return o1.getServer().compareTo(o2.getServer());
+			}
+		});
+		return list;
+	}
 
-    static public class SystemInfo {
-        public String server;
-        public QCServer.RuntimeInfo jvm;
-        public QCServer.SystemInfo system;
-        public QCServer.ThreadInfo threads;
-    }
-    private final Map<String, SystemInfo> sysInfoMap = new HashMap<>();
-    public Collection<SystemInfo> getSystemInfo() {
-        List<SystemInfo> l = new ArrayList<>();
-        synchronized (sysInfoMap) {
-            l.addAll(sysInfoMap.values());
-        }
+	public void putObjectPools(String server, QCObjectPoolProfile info) {
+		objectPoolMap.put(server, info);
+	}
 
-        Collections.sort(l, new Comparator<SystemInfo>() {
-            @Override
-            public int compare(SystemInfo o1, SystemInfo o2) {
-                return o1.server.compareTo(o2.server);
-            }
-        });
-        return l;
-    }
+	public void putConnections(String server, List<QCApiConDesc> connections) {
+		connectionMap.put(server, connections);
+	}
 
-    static public class PoolInfo {
-        public String server;
-        public QCServer.ObjectPool objPool;
-        public Collection<QCServer.ConDesc> connPoolList;
-    }
+	public List<ClusterServerPoolInfo> getPoolInfo() {
+		List<ClusterServerPoolInfo> list = new ArrayList<>(serverMap.size());
+		for (QCServer server:serverMap.values()) {
+			list.add(new ClusterServerPoolInfo(server.getName(),
+					objectPoolMap.get(server.getName()),
+					connectionMap.get(server.getName())));
+		}
+		Collections.sort(list, new Comparator<ClusterServerPoolInfo>() {
+			@Override
+			public int compare(ClusterServerPoolInfo o1, ClusterServerPoolInfo o2) {
+				return o1.getServer().compareTo(o2.getServer());
+			}
+		});
+		return list;
+	}
 
-    private final Map<String, PoolInfo> poolInfoMap = new HashMap<>();
-    public Collection<PoolInfo> getPoolInfo() {
-        List<PoolInfo> l = new ArrayList<>();
-        synchronized (poolInfoMap) {
-            l.addAll(poolInfoMap.values());
-        }
-        Collections.sort(l, new Comparator<PoolInfo>() {
-            @Override
-            public int compare(PoolInfo o1, PoolInfo o2) {
-                return o1.server.compareTo(o2.server);
-            }
-        });
-        return l;
-    }
+	public QueryProfile getRunningQuery(String clusterUniqueId) {
+		return runningMap.get(clusterUniqueId);
+	}
 
-    private Map<Integer, CMQCServerWebSocket> realtimeMessageReceivers = new HashMap<>();
-    AtomicInteger realtimeMessageReceiversId = new AtomicInteger(0);
+	public void addRunningQueries(List<QueryProfile> profileList) {
+		synchronized(runningMap) {
+			if (profileList != null && profileList.size()>0) {
+				String hostname = profileList.get(0).getServer();
+				int port = profileList.get(0).getPort();
+				Iterator<Entry<String, QueryProfile>> iter = runningMap.entrySet().iterator();
+				while (iter.hasNext()) {
+					QueryProfile profile = iter.next().getValue();
+					if (profile.getServer().equals(hostname) && profile.getPort() == port) {
+						iter.remove();
+					}
+				}
+				for (QueryProfile profile:profileList) {
+					runningMap.put(profile.getCuqId(), profile);
+				}
+			}
+		}
+	}
 
-    public int subscribe(CMQCServerWebSocket ws) {
-        int id = realtimeMessageReceiversId.getAndAdd(1);
-        realtimeMessageReceivers.put(id, ws);
-        return id;
-    }
+	public List<QueryProfile> getRunningQueries() {
+		List<QueryProfile> list = new ArrayList<>(runningMap.values());
+		Collections.sort(list, new Comparator<QueryProfile>() {
+			@Override
+			public int compare(QueryProfile o1, QueryProfile o2) {
+				return Long.compare(o2.getStartTime(), o1.getStartTime());
+			}
+		});
+		return list;
+	}
 
-    public void unSubscribe(int id) {
-        realtimeMessageReceivers.remove(id);
-    }
+	public void addCompleteQueries(List<QueryProfile> profileList){
+		synchronized(completeList) {
+			for (QueryProfile profile:profileList) {
+				if (completeList.size() > MAX_COMPLETE_QUERIES) {
+					completeList.removeFirst();
+				}
+				runningMap.remove(profile.getCuqId());
+				completeList.add(profile);
+			}
+		}
+	}
 
-    private final static long retentionTime = 200;
-    private final LinkedList<RunningQueryEvent> evtQueue = new LinkedList<>();
-    private void addRunningQueryEvent(RunningQueryEvent evt) {
-        synchronized (evtQueue) {
-            if (RQE_REMOVED.equals(evt.msgType)) {
-                Iterator<RunningQueryEvent> it = evtQueue.iterator();
-                while (it.hasNext()) {
-                    RunningQueryEvent rqe = it.next();
-                    String cuqId = (rqe.cuqId != null)? rqe.cuqId:rqe.query.cuqId;
-                    if (evt.cuqId.equals(cuqId)) {
-                        it.remove();
-                    }
-                }
-            }
+	public List<QueryProfile> getCompleteQueries() {
+		return new ArrayList<>(completeList);
+	}
 
-            evtQueue.addLast(evt);
-        }
-    }
-    public void notifySubscribers() {
-        long retainAfter = System.currentTimeMillis() - retentionTime; // send events older than 200ms
+	public void addSubscriber(long idx, CMQCWebSocket ws) {
+		if (eventManager != null) {
+			eventManager.addSubscriber(idx, ws);
+		}
+	}
 
-        LinkedList<RunningQueryEvent> el = new LinkedList<>();
-        synchronized (evtQueue) {
-            Iterator<RunningQueryEvent> it = evtQueue.iterator();
-            while (it.hasNext()) {
-                RunningQueryEvent evt = it.next();
-                if (evt.timestamp < retainAfter) {
-                    el.addLast(evt);
-                    it.remove();
-                }
-            }
-        }
+	public void removeSubscriber(long idx) {
+		if (eventManager != null) {
+			eventManager.removeSubscriber(idx);
+		}
+	}
 
-        if (el.size()>0) {
-            Gson gson = new Gson();
-            for (RunningQueryEvent evt: el) {
-                String msg = gson.toJson(evt);
-                for (CMQCServerWebSocket ws : realtimeMessageReceivers.values()) {
-                    ws.sendMessage(msg);
-                }
-            }
-            el.clear();
-        }
-    }
+	public void processWebSocketEvent(List<QueryProfile> profileList, List<ChangedProfile> changedList) {
+		synchronized(runningMap) {
+			for (QueryProfile profile:profileList) {
+				if (!runningMap.containsKey(profile.getCuqId())){
+					runningMap.put(profile.getCuqId(), profile);
+					eventManager.add(profile);
+				}
+			}
+			for (ChangedProfile changed:changedList) {
+				QueryProfile profile = runningMap.get(changed.getCuqId());
+				if (profile != null) {
+					profile.setState(changed.getState());
+					profile.setRowCnt(changed.getRowCnt());
+					profile.setEndTime(changed.getEndTime());
+					if (changed.getEndTime()>0) {
+						runningMap.remove(changed.getCuqId());
+						completeList.add(profile);
+						eventManager.add(profile);
+					} else {
+						eventManager.add(changed);
+					}
+				}
+			}
+		}
+	}
+
+	private class EventManager {
+
+		private Map<Long, CMQCWebSocket> eventSubscriberMap = new HashMap<>();
+		private ArrayDeque<QueryProfile> profileQueueList = new ArrayDeque<>();
+		private ArrayDeque<ChangedProfile> changedQueueList = new ArrayDeque<>();
+		private int subscriberCount;
+		private List<QueryProfile> profileList = new ArrayList<>();
+		private List<ChangedProfile> changedList = new ArrayList<>();
+		private int count = 0;
+		private QueryProfile profile = null;
+		private ChangedProfile changed = null;
+		private CMQCWebSocket.Response resp = new CMQCWebSocket.Response(CMQCWebSocket.Response.DATA);
+		private String respMessage = null;
+
+		public void add(QueryProfile profile) {
+			if (profileQueueList.size()+changedQueueList.size() < ConfigKeys.EVENT_QUEUE_MAX_LIMIT && running) {
+				profileQueueList.add(profile);
+			}
+		}
+
+		public void add(ChangedProfile changed) {
+			if (profileQueueList.size()+changedQueueList.size() < ConfigKeys.EVENT_QUEUE_MAX_LIMIT && running) {
+				changedQueueList.add(changed);
+			}
+		}
+
+		public void send() {
+			count = 0;
+			while (profileQueueList.size() > 0 && count++<1000) {
+				profile = profileQueueList.removeFirst();
+				profileList.add(profile);
+			}
+			while (changedQueueList.size() > 0 && count++<1000) {
+				changed = changedQueueList.removeFirst();
+				changedList.add(changed);
+			}
+			if (profileList.size() > 0 || changedList.size() > 0) {
+				synchronized(eventSubscriberMap) {
+					if (eventSubscriberMap.size() > 0) {
+						resp.setProfiles(profileList);
+						resp.setCprofiles(changedList);
+						respMessage = gson.toJson(resp);
+
+						for (CMQCWebSocket ws: eventSubscriberMap.values()) {
+							try {
+								ws.send(respMessage);
+							} catch (Exception e) {
+								LOG.error("send event error={}, client={}", SQLUtil.getMessage(e), ws.getClient(), e);
+							}
+						}
+					}
+				}
+				profileList.clear();
+				changedList.clear();
+			}
+		}
+
+		public void addSubscriber(long idx, CMQCWebSocket ws) {
+			synchronized (eventSubscriberMap) {
+				eventSubscriberMap.put(idx, ws);
+				subscriberCount = eventSubscriberMap.size();
+			}
+		}
+
+		public void removeSubscriber(long idx) {
+			synchronized (eventSubscriberMap) {
+				eventSubscriberMap.remove(idx);
+				subscriberCount = eventSubscriberMap.size();
+				if (subscriberCount == 0) {
+					profileQueueList.clear();
+					changedQueueList.clear();
+				}
+			}
+		}
+	}
 }

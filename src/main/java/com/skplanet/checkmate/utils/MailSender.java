@@ -1,5 +1,18 @@
 package com.skplanet.checkmate.utils;
 
+import java.io.PrintWriter;
+import java.io.StringWriter;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Properties;
+
+import javax.mail.Message;
+import javax.mail.Session;
+import javax.mail.Transport;
+import javax.mail.internet.InternetAddress;
+import javax.mail.internet.MimeMessage;
+
 /**
  * Created by nazgul33 on 4/7/16.
  */
@@ -7,194 +20,162 @@ package com.skplanet.checkmate.utils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.mail.Message;
-import javax.mail.MessagingException;
-import javax.mail.Session;
-import javax.mail.Transport;
-import javax.mail.internet.InternetAddress;
-import javax.mail.internet.MimeMessage;
-import java.io.PrintWriter;
-import java.io.StringWriter;
-import java.util.*;
-
 /**
  * Created by nazgul33 on 10/26/15.
  */
-public class MailSender implements Runnable {
-  protected static final Logger LOG = LoggerFactory.getLogger(MailSender.class);
+public class MailSender {
 
-  static public class Mail {
-    public final String subject;
-    private String content;
+	private static final Logger LOG = LoggerFactory.getLogger(MailSender.class);
 
-    public Mail(String subject, String content) {
-      this.subject = subject;
-      this.content = content;
-    }
+	private static MailSender _this;
+	
+	private List<Mail> mailQueue = new ArrayList<>();
+	
+	private String server;
+	private String from;
+	private int port;
+	private InternetAddress[] tos;
+	private MailSenderThread thread;
 
-    public Mail(String subject, Exception e) {
-      this.subject = subject;
+	private MailSender(String server, int port, String from, String[] toList) throws Exception {
+		this.server = server;
+		this.port = port;
+		this.from = from;
 
-      StringWriter errors = new StringWriter();
-      errors.append("Exception : ").append(e.getClass().getCanonicalName()).append("\n");
-      errors.append(e.getMessage()).append("\n");
-      errors.flush();
-      e.printStackTrace(new PrintWriter(errors));
-      this.content = errors.toString();
-    }
+		tos = new InternetAddress[toList.length];
+		for (int i=0;i<toList.length;i++) {
+			tos[i] = new InternetAddress(toList[i]);
+		}
+		
+		thread = new MailSenderThread();
+	}
 
-    public String getContent() {
-      return content;
-    }
+	public static void initialize(String server, int port, String from, String[] toList) throws Exception {
+		if (_this == null) {
+			_this = new MailSender(server, port, from, toList);
+		}
+	}
+	
+	public static void close() {
+		if (_this != null && _this.thread.isAlive()) {
+			_this.thread.close();
+		}
+	}
+	
+	public static void send(Mail mail) {
+		if (_this != null) {
+			_this.addMail(mail);
+		}
+	}
+	
+	private void addMail(Mail mail) {
+		synchronized (mailQueue) {
+			mailQueue.add(mail);
+		}
+		LOG.info("mail queued. {}", mail.subject);
+	}
 
-    public void setContent(String content) {
-      this.content = content;
-    }
-  }
+	private class MailSenderThread extends Thread {
+		
+		private boolean running = false;
+		
+		public MailSenderThread() {
+			super("mail sender");
+		}
 
-  private final String smtpServer, smtpFrom;
-  private final int smtpPort;
-  private final InternetAddress[] recipientAddresses;
+		@Override
+		public void run() {
+			
+			LOG.info("MailSender thread started.");
+			
+			running = true;
+			try {
+				Properties properties = System.getProperties();
+				properties.setProperty("mail.smtp.host", server);
+				properties.setProperty("mail.smtp.port", Integer.toString(port));
+	
+				Session session = Session.getDefaultInstance(properties);
+	
+				InternetAddress iFrom = new InternetAddress(from);
+				List<Mail> mq = new ArrayList<>();
+	
+				while (running) {
+					synchronized (mailQueue) {
+						if (mailQueue.size() > 0) {
+							mq.addAll(mailQueue);
+							mailQueue.clear();
+						}
+					}
+					for (Mail mail : mq) {
+						LOG.info("sending mail '{}'", mail.getSubject());
+	
+						try {
+							MimeMessage message = new MimeMessage(session);
+							message.setFrom(iFrom);
+							message.addRecipients(Message.RecipientType.TO, tos);
+							message.setSubject(mail.getSubject());
+							message.setText(mail.getContent());
+	
+							Transport.send(message);
+							LOG.info("Mail sent to {}", Arrays.toString(tos));
+						} catch (Exception e) {
+							LOG.error("Exception sending mail", e);
+						}
+					}
+					mq.clear();
+					try {
+						Thread.sleep(500);
+					} catch (InterruptedException e) {
+						break;
+					}
+				}
+			} catch (Exception e) {
+				LOG.error("Unexpected exception", e);
+			}
+			
+			LOG.info("MailSender thread started.");
+		}
+		
+		public void close() {
+			running = false;
+			interrupt();
+		}
+	}
+	
+	public static class Mail {
+		private String subject;
+		private String content;
 
-  public MailSender(String smtpServer, String smtpFrom, int smtpPort, List<String> recipients) throws Exception {
-    this.smtpServer = smtpServer;
-    this.smtpFrom = smtpFrom;
-    this.smtpPort = smtpPort;
+		public Mail(String subject) {
+			this(subject, (String)null);
+		}
+		
+		public Mail(String subject, String content) {
+			this.subject = subject;
+			this.content = content;
+		}
 
-    recipientAddresses = new InternetAddress[recipients.size()];
-    for (int i=0; i<recipients.size(); i++)
-      recipientAddresses[i] = new InternetAddress(recipients.get(i));
-  }
+		public Mail(String subject, Exception e) {
+			this.subject = subject;
 
-  private final List<Mail> mailQueue = new ArrayList<>();
-  public void addMail(Mail mail) {
-    synchronized (mailQueue) {
-      mailQueue.add(mail);
-    }
-    LOG.info("mail queued. {}", mail.subject);
-  }
+			StringWriter errors = new StringWriter();
+			errors.append("Exception : ").append(e.getClass().getCanonicalName()).append("\n");
+			errors.append(e.getMessage()).append("\n");
+			errors.flush();
+			e.printStackTrace(new PrintWriter(errors));
+			this.content = errors.toString();
+		}
 
-  public void run() {
-    try {
-      Properties properties = System.getProperties();
-      properties.setProperty("mail.smtp.host", smtpServer);
-      properties.setProperty("mail.smtp.port", String.valueOf(smtpPort));
+		public String getSubject() {
+			return subject;
+		}
+		
+		public String getContent() {
+			return content;
+		}
 
-      Session session = Session.getDefaultInstance(properties);
-
-      InternetAddress iFrom = new InternetAddress(smtpFrom);
-      Collection<Mail> mq = new ArrayList<>();
-
-      LOG.info("MailSender started.");
-
-      while (!Thread.interrupted()) {
-        synchronized (mailQueue) {
-          if (mailQueue.size() > 0) {
-            for (Mail mail : mailQueue) {
-              mq.add(mail);
-            }
-            mailQueue.clear();
-          }
-        }
-        if (mq.size() == 0) {
-          try {
-            Thread.sleep(500);
-          } catch (InterruptedException e) {
-            // ignore
-          }
-          continue;
-        }
-
-        for (Mail mail : mq) {
-          LOG.info("sending mail '{}'", mail.subject);
-
-          try {
-            MimeMessage message = new MimeMessage(session);
-            message.setFrom(iFrom);
-            message.addRecipients(Message.RecipientType.TO, recipientAddresses);
-            message.setSubject(mail.subject);
-            message.setText(mail.content);
-
-            Transport.send(message);
-            LOG.info("Mail sent to {}", recipientAddresses);
-          } catch (MessagingException e) {
-            LOG.error("Exception sending mail", e);
-          }
-        }
-        mq.clear();
-      }
-    } catch (Exception e) {
-      LOG.error("Unexpected exception", e);
-    }
-  }
-
-  public static void main(String args[]) {
-    String server = null;
-    int port = 25;
-    String from = null;
-    List<String> recipients = null;
-    String title = null;
-    String msg = null;
-    try {
-      for (int i = 0; i < args.length; i++) {
-        switch (args[i]) {
-          case "-s":
-            server = args[++i];
-            System.out.println("Server : " + server);
-            break;
-          case "-p":
-            port = Integer.valueOf(args[++i]);
-            System.out.println("Port   : " + port);
-            break;
-          case "-f":
-            from = args[++i];
-            System.out.println("From   : " + from);
-            break;
-          case "-r":
-            recipients = Arrays.asList(args[++i].split(","));
-            System.out.println("Recipients : " + recipients);
-            break;
-          case "-t":
-            title = args[++i];
-            System.out.println("Title  : " + title);
-            break;
-          case "-m":
-            msg = args[++i];
-            System.out.println("Message : " + msg);
-            break;
-          default:
-            System.out.println("unknown option");
-            break;
-        }
-      }
-    } catch (Exception e) {
-      System.err.println("error parsing arguments.");
-      e.printStackTrace();
-      System.exit(1);
-    }
-
-    MailSender mailSender = null;
-    try {
-      mailSender = new MailSender(server, from, port, recipients);
-    } catch (Exception e) {
-      System.err.println("error instantiating MailSender");
-      e.printStackTrace();
-      System.exit(1);
-    }
-
-    Thread t = new Thread(mailSender);
-    t.setDaemon(false);
-    t.start();
-
-    Mail mail = new Mail(title, msg);
-    mailSender.addMail(mail);
-
-    try {
-      Thread.sleep(10);
-      t.interrupt();
-      t.join();
-    } catch (Exception e) {
-      // ignore
-    }
-  }
+		public void setContent(String content) {
+			this.content = content;
+		}
+	}
 }

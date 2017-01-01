@@ -8,16 +8,13 @@
 </head>
 <body>
 <%@include file="header.jsp"%>
-<link rel="stylesheet" type="text/css" href="/ladda/ladda-themeless.min.css">
-<script src="/ladda/spin.min.js"></script>
-<script src="/ladda/ladda.min.js"></script>
 <%@include file="queries.funcs.html"%>
 <script type="text/javascript">
     var g_connection_pool = [];
     var g_object_pool = null;
 
     function getSystemStats(next) {
-        $.getJSON('/api/qc/sysInfoList?cluster='+g_cluster_name, function(r) {
+        $.getJSON('/api/qc/sysInfoList?cluster='+cluster_name, function(r) {
             for (var i=0; i<r.data.length; i++) {
                 var s = r.data[i];
                 var id='stats_'+s.server.toLowerCase();
@@ -46,7 +43,7 @@
 
     function getMetrics() {
         $.getJSON('/api/metrics/metrics', function(r) {
-            var svrPrefix='queries.'+g_cluster_name+'.';
+            var svrPrefix='queries.'+cluster_name+'.';
             for (var mName in r.meters) {
                 if (mName.startsWith(svrPrefix)) {
                     var metric = r.meters[mName];
@@ -64,14 +61,14 @@
         $('#header-title').html('QueryCache :: Dashboard</span>');
         $('#headerMenuDashboard').removeClass('btn-primary').addClass('btn-warning').attr('disabled', 'disabled');
 
-        if (g_cluster_name == null || g_cluster_name.length == 0) {
+        if (cluster_name == null || cluster_name.length == 0) {
             <c:if test="${fn:length(clusters.qcClusters) > 0}">
             window.location.href=window.location.href + "?cluster=${clusters.qcClusters[0]}";
             </c:if>
         }
         else {
-            g_rq_table = $('#queriesinflight tbody');
-            g_cq_table = $('#queriescomplete tbody');
+            rq_table = $('#queriesinflight tbody');
+            cq_table = $('#queriescomplete tbody');
             getRunningQueries();
             initWebSocket();
 
@@ -106,11 +103,10 @@
         <thead><tr>
             <th class="qServer">server</th>
             <th class="qId">id</th>
-            <th class="qBackend">type</th>
             <th class="qUser">user</th>
-            <th class="qStatement">statement</th>
+            <th class="qQuery">query</th>
             <th class="qState">state</th>
-            <th class="qClient">client ip</th>
+            <th class="qClient">client</th>
             <th class="qRows">rows</th>
             <th class="qStartTime">startTime</th>
             <th class="qElapsedTime">elapsedTime</th>
